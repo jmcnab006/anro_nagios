@@ -1,0 +1,5 @@
+{{ ansible_managed | comment }}
+
+{% for key, value in anro_nagios_cgi_full.items() %}
+{{ key }}={{ value }}
+{% endfor %}

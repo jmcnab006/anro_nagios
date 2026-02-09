@@ -1,0 +1,219 @@
+# Nagios Manager Configuration for Ubuntu/Debian nagios4 package
+# Copy this file to /etc/nagios-manager/config.yaml
+
+# Nagios installation paths (Ubuntu nagios4 package defaults)
+nagios:
+  # Base Nagios configuration directory
+  base_dir: /etc/nagios4
+
+  # Nagios configuration file
+  config_file: /etc/nagios4/nagios.cfg
+
+  # Nagios binary path (Ubuntu package)
+  binary: /usr/sbin/nagios4
+
+  # Objects configuration directory
+  objects_dir: /etc/nagios4/conf.d
+
+  # Service templates directory
+  templates_dir: /etc/nagios4/templates
+
+  # Nagios plugins directory
+  plugins_dir: /usr/lib/nagios/plugins
+
+  # Log directory
+  log_dir: /var/log/nagios4
+
+  # Variable/state directory
+  var_dir: /var/lib/nagios4
+
+# Backup settings
+backup:
+  # Directory for configuration backups
+  dir: /var/backups/nagios4
+
+  # Maximum number of backups to keep (0 = unlimited)
+  max_backups: 30
+
+  # Automatically create backup before operations
+  auto_backup: true
+
+  # Backup retention in days (0 = no automatic cleanup)
+  retention_days: 90
+
+# Logging configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+
+  # Log file path (null for stdout only)
+  file: /var/log/nagios-manager.log
+
+  # Maximum log file size in MB
+  max_size_mb: 10
+
+  # Number of backup log files to keep
+  backup_count: 5
+
+# Validation settings
+validation:
+  # Always validate configuration before saves
+  validate_on_save: true
+
+  # Timeout for validation operations in seconds
+  timeout: 30
+
+  # Additional validation checks
+  check_dependencies: true
+  check_templates: true
+
+# Object defaults
+defaults:
+  # Host object defaults
+  host:
+    use: generic-host
+    check_command: check-host-alive
+    max_check_attempts: 3
+    check_interval: 5
+    retry_interval: 1
+    notification_interval: 60
+    notification_period: 24x7
+    notification_options: d,u,r
+
+  # Service object defaults
+  service:
+    use: generic-service
+    max_check_attempts: 3
+    check_interval: 5
+    retry_interval: 1
+    notification_interval: 60
+    notification_period: 24x7
+    notification_options: w,u,c,r
+
+  # Contact object defaults
+  contact:
+    use: generic-contact
+    host_notification_period: 24x7
+    service_notification_period: 24x7
+    host_notification_options: d,u,r
+    service_notification_options: w,u,c,r
+    host_notification_commands: notify-host-by-email
+    service_notification_commands: notify-service-by-email
+
+# Security settings
+security:
+  # Require confirmation for destructive operations
+  require_confirmation: true
+
+  # Allow overwrite of existing configurations
+  allow_overwrite: false
+
+  # Backup before destructive operations
+  backup_before_delete: true
+
+# Performance settings
+performance:
+  # Maximum concurrent operations
+  max_concurrent: 5
+
+  # Cache configuration objects in memory
+  enable_cache: true
+
+  # Cache timeout in seconds
+  cache_timeout: 300
+
+# Integration settings
+integration:
+  # Nagios reload command (Ubuntu nagios4 package)
+  reload_command: systemctl reload nagios4
+
+  # Nagios restart command
+  restart_command: systemctl restart nagios4
+
+  # Nagios status command
+  status_command: systemctl status nagios4
+
+  # Git integration for configuration versioning
+  git:
+    enabled: false
+    repository: /etc/nagios4/.git
+    auto_commit: true
+    commit_message: "Nagios configuration update via nagios-manager"
+
+  # External notification commands
+  notifications:
+    # Command to run after successful configuration reload
+    on_reload_success: null
+
+    # Command to run after failed configuration reload
+    on_reload_failure: null
+
+# Template definitions
+templates:
+  # Custom service templates directory
+  custom_dir: /etc/nagios4/templates
+
+  # Default templates to include (Ubuntu nagios4 package templates)
+  default_includes:
+    - generic-host
+    - generic-service
+    - generic-contact
+    - linux-server
+    - windows-server
+    - local-service
+    - generic-printer
+    - generic-switch
+
+# Object relationships
+relationships:
+  # Automatically create hostgroups based on directory structure
+  auto_hostgroups: true
+
+  # Default parent assignment strategy
+  parent_strategy: map_based  # options: none, map_based, network_based
+
+  # Default contact assignment
+  default_contacts:
+    - nagiosadmin
+
+  # Default contact groups
+  default_contact_groups:
+    - admins
+
+# File organization (Ubuntu nagios4 structure)
+organization:
+  # Organize hosts by subdirectories in conf.d
+  hosts_by_directory: true
+
+  # Directory naming strategy for hosts
+  host_directory_strategy: type_based  # options: type_based, environment, custom
+
+  # Services file organization
+  services_organization: separate_files  # options: separate_files, combined_file
+
+  # File naming convention
+  file_naming:
+    host: "{name}.cfg"
+    service: "{host_name}-{service_name}.cfg"
+    command: "{name}.cfg"
+    contact: "{name}.cfg"
+    hostgroup: "{name}.cfg"
+    contactgroup: "{name}.cfg"
+
+# Advanced features
+advanced:
+  # Enable experimental features
+  experimental_features: false
+
+  # Plugin system
+  plugins:
+    enabled: false
+    directory: /usr/local/nagios-manager/plugins
+
+  # Custom validators
+  custom_validators: []
+
+  # Configuration generators
+  generators:
+    enabled: false
+    directory: /usr/local/nagios-manager/generators

@@ -1,0 +1,46 @@
+anro_nagios_install: true
+anro_nagios_domain: "example.com"
+anro_nagios_service: 'nagios4.service'
+# anro_nagios_service_user: 'nagios'
+# anro_nagios_service_group: 'nagios'
+
+anro_nagios_force: false
+
+anro_nagios_users: []
+
+anro_nagios_config_path: '/etc/nagios4'
+anro_nagios_objects_path: "{{ anro_nagios_config_path }}/objects"
+anro_nagios_binary: '/usr/sbin/nagios4'
+anro_nagios_config_file: "{{ anro_nagios_config_path }}/nagios.cfg"
+
+anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
+anro_nagios_add_packages: []
+anro_nagios_remove_packages: []
+
+# anro_nagios_nagios_httpd_conf: /etc/apache2/sites-available
+anro_nagios_auth_realm: "monitoring"
+anro_nagios_htpasswd_file: /etc/nagios4/htpassword.users
+
+anro_nagios_certificate_key_file: /etc/ssl/private/ssl-cert-snakeoil.key
+anro_nagios_certificate_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+anro_nagios_certificate_chain_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+anro_nagios_basic_auth_provider:
+  - file
+anro_nagios_use_ldap: false
+anro_nagios_ldap_provider: "nagios-ldap"
+anro_nagios_certificate_auth_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+anro_nagios_auth_ldap_bind_dn: ""
+anro_nagios_auth_ldap_bind_pw: ""
+anro_nagios_auth_ldap_url: ""
+
+anro_nagios_cgi_config: {}
+anro_nagios_config: {}
+anro_nagios_resource_config: {}
+anro_nagios_commands: []
+anro_nagios_contacts: []
+anro_nagios_contactgroups: []
+anro_nagios_host_templates: []
+anro_nagios_contact_templates: []
+anro_nagios_contactgroup_templates: []
+anro_nagios_service_templates: []
+anro_nagios_timeperiod_templates: []

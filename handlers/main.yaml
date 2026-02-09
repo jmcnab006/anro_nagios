@@ -1,0 +1,49 @@
+- name: Test anro_nagios apache
+  ansible.builtin.command: 'apachectl configtest'
+  register: apache_test
+  failed_when:
+    - '"Syntax OK" not in apache_test.stderr'
+    - apache_test.rc != 0
+  changed_when:
+    - '"Syntax OK" in apache_test.stderr'
+    - apache_test.rc == 0
+  notify:
+    - "Reload apache"
+
+- name: Reload anro_nagios apache
+  ansible.builtin.systemd_service:
+    name: apache2
+    state: reloaded
+  listen: certificate updated
+  throttle: 1
+  register: apache_reload
+  until: apache_reload is succeeded
+  retries: 5
+  delay: 2
+
+- name: Test anro_nagios nagios
+  ansible.builtin.command: "{{ usi_nagios_binary }} -v {{ usi_nagios_config_file }}"
+  register: nagios_test
+  failed_when:
+    - '"Total Errors:   0" not in nagios_test.stderr'
+    - nagios_test.rc != 0
+  changed_when:
+    - '"Total Errors:   0" in nagios_test.stderr'
+    - nagios_test.rc == 0
+  notify:
+    - "Reload nagios"
+
+- name: Reload anro_nagios apache
+  ansible.builtin.systemd_service:
+    name: nagios
+    state: reloaded
+  throttle: 1
+  register: nagios_reload
+  until: nagios_reload is succeeded
+  retries: 5
+  delay: 2
+
+- name: Restart anro_nagios postfix
+  ansible.builtin.systemd_service:
+    name: postfix
+    state: restarted

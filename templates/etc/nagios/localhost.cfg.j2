@@ -1,0 +1,57 @@
+{% set warn_load = (ansible_processor_vcpus*0.8)|int|float %}
+{% set crit_load = (ansible_processor_vcpus*0.9)|int|float %}
+define host {
+    use                     linux-server            ; Name of host template to use
+                                                    ; This host definition will inherit all variables that are defined
+                                                    ; in (or inherited by) the linux-server host template definition.
+    host_name               {{ inventory_hostname }}
+    alias                   {{ inventory_hostname }}
+    address                 127.0.0.1
+}
+define hostgroup {
+    hostgroup_name          monitor-servers           ; The name of the hostgroup
+    alias                   monitor servers           ; Long name of the group
+    members                 {{ inventory_hostname }}               ; Comma separated list of hosts that belong to this group
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     PING
+    check_command           check_ping!100.0,20%!500.0,60%
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     Root Partition
+    check_command           check_local_disk!20%!10%!/
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     Current Users
+    check_command           check_local_users!20!50
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     Total Processes
+    check_command           check_local_procs!4000!8000!RSZDT
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     Current Load
+    check_command           check_local_load! {{ warn_load }},{{ warn_load }},{{ warn_load }}!{{ crit_load }},{{ crit_load }},{{ crit_load }}
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     SSH
+    check_command           check_ssh
+}
+define service {
+    use                     local-service           ; Name of service template to use
+    host_name               {{ inventory_hostname }}
+    service_description     HTTP
+    check_command           check_http
+}

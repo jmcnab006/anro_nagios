@@ -1,0 +1,30 @@
+{{ ansible_managed | comment }}
+# apache configuration for nagios 4.x
+ServerName {{ inventory_hostname }}.whatsdown.usinternet.com
+
+ScriptAlias /nagios/cgi-bin /usr/lib/cgi-bin/nagios4
+
+# Where the stylesheets (config files) reside
+Alias /nagios/stylesheets /etc/nagios4/stylesheets
+
+# Where the HTML pages live
+Alias /nagios /usr/share/nagios4/htdocs
+
+<DirectoryMatch (/usr/share/nagios4/htdocs|/usr/lib/cgi-bin/nagios4|/etc/nagios4/stylesheets)>
+    Options FollowSymLinks
+    DirectoryIndex index.php index.html
+    AllowOverride None
+        <RequireAll>
+         AuthDigestDomain "{{ anro_nagios_auth_realm }}"
+         Require all granted
+         AuthBasicProvider {{ anro_nagios_basic_auth_provider | join(" ") }}
+         AuthName "{{ anro_nagios_auth_realm }}"
+         AuthType Basic
+         AuthUserFile "{{ anro_nagios_htpasswd_file }}"
+         Require valid-user
+        </RequireAll>
+</DirectoryMatch>
+
+<Directory /usr/share/nagios4/htdocs>
+    Options     +ExecCGI
+</Directory>

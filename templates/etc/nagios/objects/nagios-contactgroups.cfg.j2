@@ -1,0 +1,6 @@
+#jinja2:lstrip_blocks: True
+define contactgroup {
+    {% for key in item%}
+    {{ "\t{0:<35}{1:<20}".format(key, item[key]) }}
+    {% endfor %}
+}

@@ -1,0 +1,60 @@
+---
+# - name: Import prerequisites
+#  ansible.builtin.import_tasks: prerequisites.yaml
+- name: Build full configurations
+  block:
+    - name: BUILD | cgi.cfg
+      ansible.builtin.set_fact:
+        anro_nagios_cgi_full: "{{ anro_nagios_cgi_defaults | combine(anro_nagios_cgi_config) }}"
+
+    - name: BUILD | nagios.cfg
+      ansible.builtin.set_fact:
+        anro_nagios_config_full: "{{ anro_nagios_config_defaults | combine(anro_nagios_config) }}"
+
+    - name: BUILD | resource.cfg
+      ansible.builtin.set_fact:
+        anro_nagios_resource_full: "{{ anro_nagios_resource_defaults | combine(anro_nagios_resource_config) }}"
+
+    - name: BUILD | commands
+      ansible.builtin.set_fact:
+#        anro_nagios_commands_full: "{{ anro_nagios_commands_defaults | combine(anro_nagios_commands) }}"
+        anro_nagios_commands_full: "{{ anro_nagios_commands_defaults + anro_nagios_commands }}"
+
+    - name: BUILD | contacts
+      ansible.builtin.set_fact:
+        anro_nagios_contacts_full: "{{ anro_nagios_contacts_defaults + anro_nagios_contacts }}"
+
+    - name: BUILD | contactgroups
+      ansible.builtin.set_fact:
+        anro_nagios_contactgroups_full: "{{ anro_nagios_contactgroups_defaults + anro_nagios_contactgroups }}"
+
+    - name: BUILD | host_templates
+      ansible.builtin.set_fact:
+        anro_nagios_host_templates_full: "{{ anro_nagios_host_templates_defaults + anro_nagios_host_templates }}"
+
+    - name: BUILD | contact_templates
+      ansible.builtin.set_fact:
+        anro_nagios_contact_templates_full: "{{ anro_nagios_contact_templates_defaults + anro_nagios_contact_templates }}"
+
+    - name: BUILD | contactgroup_templates
+      ansible.builtin.set_fact:
+        anro_nagios_contactgroup_templates_full: >-
+          {{ anro_nagios_contactgroup_templates_defaults + anro_nagios_contactgroup_templates }}
+
+    - name: BUILD | service_templates
+      ansible.builtin.set_fact:
+        anro_nagios_service_templates_full: "{{ anro_nagios_service_templates_defaults + anro_nagios_service_templates }}"
+
+    - name: BUILD | timeperiod_templates
+      ansible.builtin.set_fact:
+        anro_nagios_timeperiod_templates_full: >-
+          {{ anro_nagios_timeperiod_templates_defaults + anro_nagios_timeperiod_templates }}
+
+- name: Install nagios from repository
+  ansible.builtin.import_tasks: install.yaml
+
+- name: Configure nagios and apache
+  ansible.builtin.import_tasks: configure.yaml
+
+# - name: Build nagios core from source
+#  ansible.builtin.import_tasks: build-nagios.yaml

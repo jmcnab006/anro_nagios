@@ -1,0 +1,25 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# Nagios system utility for config management.
+
+import nagios
+from nagios import NagiosAdmin
+import argparse
+
+parser = argparse.ArgumentParser(description='Nagios system utility for config management.')
+parser.add_argument('command', choices=['reload', 'check', 'backup'],
+                    help='The Nagios administration command to execute. "reload" performs check, backup, then restart.')
+args = parser.parse_args()
+
+try:
+    if args.command == 'reload':
+        # This function handles the full lifecycle: Backup -> Check -> Reload
+        NagiosAdmin.reload_nagios()
+    elif args.command == 'check':
+        NagiosAdmin.check_config()
+    elif args.command == 'backup':
+        NagiosAdmin.backup_config()
+except RuntimeError as e:
+    # Catches the specific error raised in _run_command if a critical step fails
+    print(f"A fatal error occurred during the command execution: {e}")
+    sys.exit(1)

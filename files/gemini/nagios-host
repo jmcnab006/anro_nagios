@@ -1,0 +1,53 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# nagios-host - Refactored to use the new NagiosAdmin class
+
+import argparse
+import nagios
+from nagios import NagiosAdmin, Host # Assuming you imported Host in nagios.py
+
+# ... (ArgumentParser setup remains the same, but simplified) ...
+
+parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description='''\
+Used to add, delete, or list a host. Configuration changes trigger a robust check/backup/reload cycle.
+...
+''')
+# Add all your existing arguments: name, address, -o, -m, -l, -d, -f
+parser.add_argument('name', nargs='?', help="the host resource name to add...")
+parser.add_argument('address', nargs='?', help="ip address of the host resource")
+parser.add_argument('-o', "--options", nargs="*", help="list of options in a key=value space separated list")
+parser.add_argument('-m', "--mapname", help="define the map that this host will go into...")
+parser.add_argument('-l', "--list", help="lists current hosts", action='store_true')
+parser.add_argument('-d', "--delete", help="delete the host specified", action='store_true')
+parser.add_argument('-f', "--force", help="force overwrite of files", action='store_true')
+
+args = parser.parse_args()
+
+if args.name:
+    obj = Host(
+        name=args.name,
+        address=args.address,
+        overwrite=args.force,
+        mapname=args.mapname,
+        options=args.options
+    )
+
+    if args.address or args.options:
+        # 1. Save Config File
+        obj.save()
+
+        # 2. Trigger Backup, Check, and Reload
+        NagiosAdmin.reload_nagios()
+
+    elif args.delete:
+        # 1. Delete Config File
+        obj.delete()
+
+        # 2. Trigger Backup, Check, and Reload
+        NagiosAdmin.reload_nagios()
+
+    else:
+        # Display config
+        obj.display()
+
+# ... (Handle listing logic for -l and -m flags) ...

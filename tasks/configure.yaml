@@ -1,0 +1,238 @@
+---
+- name: CONFIGURE | Set htpasswd for gui users
+  community.general.htpasswd:
+    path: "{{ anro_nagios_htpasswd_file }}"
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    # realm: "{{ anro_nagios_auth_realm }}"
+    state: present
+    owner: root
+    group: root
+    mode: "644"
+  no_log: true
+  with_items: "{{ anro_nagios_users }}"
+  when: anro_nagios_users | length > 0
+
+- name: CONFIGURE | Apache
+  notify:
+    - "Test apache"
+  block:
+    - name: CONFIGURE | Enable apache2 modules
+      community.general.apache2_module:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - cgi
+        - rewrite
+        - ssl
+        - authnz_ldap
+        - auth_digest
+        - authz_groupfile
+
+    - name: CONFIGURE | Apache default configuration
+      ansible.builtin.template:
+        src: etc/apache2/sites-available/default.conf.j2
+        dest: /etc/apache2/sites-available/default.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: CONFIGURE | Apache nagios configuration
+      ansible.builtin.template:
+        src: etc/apache2/sites-available/nagios.conf.j2
+        dest: /etc/apache2/sites-available/nagios.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: CONFIGURE | Apache ldap configuration
+      ansible.builtin.template:
+        src: etc/apache2/conf-available/ldap.conf.j2
+        dest: /etc/apache2/conf-available/ldap.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: CONFIGURE | Apache enable default site
+      ansible.builtin.file:
+        src: /etc/apache2/sites-available/default.conf
+        dest: /etc/apache2/sites-enabled/default.conf
+        state: link
+
+    - name: CONFIGURE | Apache enable nagios site
+      ansible.builtin.file:
+        src: /etc/apache2/sites-available/nagios.conf
+        dest: /etc/apache2/sites-enabled/nagios.conf
+        state: link
+
+    - name: CONFIGURE | Apache enable ldap config
+      ansible.builtin.file:
+        src: /etc/apache2/conf-available/ldap.conf
+        dest: /etc/apache2/conf-enabled/ldap.conf
+        state: link
+      when: anro_nagios_use_ldap | bool
+
+    - name: CONFIGURE | Apache remove 000-default.conf
+      ansible.builtin.file:
+        path: /etc/apache2/sites-enabled/000-default.conf
+        state: absent
+
+- name: CONFIGURE | Nagios
+  notify:
+    - "Test nagios"
+  block:
+    - name: CONFIGURE | Nagios symlink nagios4 to nagios in /etc
+      ansible.builtin.file:
+        src: "{{ anro_nagios_config_path }}"
+        dest: /etc/nagios
+        state: link
+        force: "{{ anro_nagios_force }}"  # Use 'force: true' to overwrite if 'dest' already exists or is a file
+      when: anro_nagios_config_path != "/etc/nagios"
+
+    - name: CONFIGURE | Nagios cgi.cfg
+      ansible.builtin.template:
+        src: etc/nagios/cgi.cfg.j2
+        dest: /etc/nagios/cgi.cfg
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: CONFIGURE | Nagios nagios.cfg
+      ansible.builtin.template:
+        src: etc/nagios/nagios.cfg.j2
+        dest: /etc/nagios/nagios.cfg
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: CONFIGURE | Nagios resource.cfg
+      ansible.builtin.template:
+        src: etc/nagios/resource.cfg.j2
+        dest: /etc/nagios/resource.cfg
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: CONFIGURE | Verify custom directories
+      ansible.builtin.file:
+        path: "{{ anro_nagios_objects_path }}/{{ item }}"
+        state: directory
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      with_items:
+        - commands
+        - contacts
+        - hosts
+        - templates
+        - timeperiods
+        - hosts/default
+
+    - name: CONFIGURE | Remove default config files config
+      ansible.builtin.file:
+        path: "{{ anro_nagios_objects_path }}/{{ item }}"
+        state: absent
+      loop:
+        - commands.cfg
+        - contacts.cfg
+        - printer.cfg
+        - switch.cfg
+        - templates.cfg
+        - timeperiods.cfg
+        - windows.cfg
+
+    - name: CONFIGURE | Add nagios service definitions directory
+      ansible.builtin.file:
+        path: "{{ anro_nagios_config_path }}/servicedefs"
+        state: directory
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+
+    - name: CONFIGURE | Add default commands
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-commands.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/commands/{{ item.command_name }}.command.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      with_items: "{{ anro_nagios_commands_full }}"
+      when: anro_nagios_commands_full | length > 0
+
+    - name: CONFIGURE | Add default contacts
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-contacts.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/contacts/{{ item.contact_name }}.contact.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_contacts_full }}"
+      when: anro_nagios_contacts_full | length > 0
+
+    - name: CONFIGURE | Add default contactgroups
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-contactgroups.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/contacts/{{ item.contactgroup_name }}.contactgroup.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_contactgroups_full }}"
+      when: anro_nagios_contactgroups_full | length > 0
+
+    - name: CONFIGURE | Add default host templates
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-hosts.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_host_templates_full }}"
+      when: anro_nagios_host_templates_full | length > 0
+
+    - name: CONFIGURE | Add default service templates
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-services.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_service_templates_full }}"
+      when: anro_nagios_service_templates_full | length > 0
+
+    - name: CONFIGURE | Add default contact templates
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-contacts.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_contact_templates_full }}"
+      when: anro_nagios_contact_templates_full | length > 0
+
+    - name: CONFIGURE | Add default contactgroup templates
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-contactgroups.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_contactgroup_templates_full }}"
+      when: anro_nagios_contactgroup_templates_full | length > 0
+
+    - name: CONFIGURE | Add default timeperiod templates
+      ansible.builtin.template:
+        src: etc/nagios/objects/nagios-timeperiods.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/timeperiods/{{ item.name }}.template.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+      loop: "{{ anro_nagios_timeperiod_templates_full }}"
+      when: anro_nagios_timeperiod_templates_full | length > 0
+
+    - name: CONFIGURE | Add localhost with hostname entry
+      ansible.builtin.template:
+        src: etc/nagios/localhost.cfg.j2
+        dest: "{{ anro_nagios_objects_path }}/localhost.cfg"
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"

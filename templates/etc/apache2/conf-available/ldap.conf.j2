@@ -1,0 +1,9 @@
+{{ ansible_managed | comment }}
+LDAPTrustedGlobalCert CA_BASE64  "{{ anro_nagios_certificate_auth_file }}"
+LDAPTrustedMode TLS
+
+<AuthnProviderAlias ldap {{ anro_nagios_ldap_provider }}>
+         AuthLDAPBindDN "{{ anro_nagios_auth_ldap_bind_dn }}"
+         AuthLDAPBindPassword "{{ anro_nagios_auth_ldap_bind_pw }}"
+         AuthLDAPUrl "{{ anro_nagios_auth_ldap_url }}"
+</AuthnProviderAlias>

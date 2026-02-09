@@ -1,0 +1,79 @@
+---
+# install prerequisites for installing nagios
+- name: INSTALL | Update apt package list
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  changed_when: false
+
+- name: INSTALL | Install required apt packages
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - mailutils
+      - apache2
+      - libapache2-mod-php
+      - monitoring-plugins-contrib
+      - nagios4
+      - openssl
+      - perl
+      - php
+      - php-gd
+      - python3-passlib
+      - wget
+      - unzip
+    state: present
+
+- name: INSTALL | Install perl apt packages
+  ansible.builtin.apt:
+    name:
+      - libnet-snmp-perl
+      - libcrypt-x509-perl
+      - libdatetime-format-dateparse-perl
+      - libwww-perl
+      - libjson-perl
+      - libjson-parse-perl
+      - liblwp-protocol-https-perl
+      - libtext-glob-perl
+      - libdbd-mysql-perl
+    state: present
+
+- name: INSTALL | Start postfix on server boot
+  ansible.builtin.service:
+    name: postfix
+    state: started
+    enabled: true
+
+- name: INSTALL | Create /etc/mailname
+  ansible.builtin.copy:
+    content: "{{ inventory_hostname }}.whatsdown.usinternet.com"
+    dest: /etc/mailname
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ anro_nagios_force }}"
+
+- name: INSTALL | Add postfix configuration
+  ansible.builtin.template:
+    src: etc/postfix/main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - "Restart postfix"
+
+- name: INSTALL | Install additional packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ anro_nagios_add_packages }}"
+  when: anro_nagios_add_packages | length > 0
+
+- name: INSTALL | Remove requested packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ anro_nagios_remove_packages }}"
+  when: anro_nagios_remove_packages | length > 0

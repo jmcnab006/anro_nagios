@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Nagios Manager Command Line Interface
+Filename: nagios-cli
+Version: 3.0
+
+Command-line interface for managing Nagios configurations with backup,
+validation, and status checking capabilities.
+"""
+
+import argparse
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+# Import the main manager (assuming it's in the same directory or installed)
+try:
+    from nagios_manager import (
+        NagiosManager, NagiosConfig, NagiosManagerError,
+        ConfigValidationError, BackupError
+    )
+except ImportError:
+    print("Error: nagios_manager module not found. Please ensure it's in your Python path.")
+    sys.exit(1)
+
+
+class NagiosCLI:
+    """Command line interface for Nagios Manager."""
+
+    def __init__(self):
+        self.manager = None
+
+    def setup_manager(self, args):
+        """Initialize the Nagios Manager with custom configuration if provided."""
+        config_kwargs = {}
+
+        if hasattr(args, 'nagios_dir') and args.nagios_dir:
+            config_kwargs['nagios_dir'] = Path(args.nagios_dir)
+        if hasattr(args, 'objects_dir') and args.objects_dir:
+            config_kwargs['objects_dir'] = Path(args.objects_dir)
+        if hasattr(args, 'templates_dir') and args.templates_dir:
+            config_kwargs['templates_dir'] = Path(args.templates_dir)
+        if hasattr(args, 'backup_dir') and args.backup_dir:
+            config_kwargs['backup_dir'] = Path(args.backup_dir)
+
+        config = NagiosConfig(**config_kwargs) if config_kwargs else NagiosConfig()
+        log_level = getattr(args, 'log_level', 'INFO')
+
+        self.manager = NagiosManager(config, log_level)
+
+    def handle_host_commands(self, args):
+        """Handle host-related commands."""
+        if args.host_action == 'create':
+            return self.create_host(args)
+        elif args.host_action == 'delete':
+            return self.delete_host(args)
+        elif args.host_action == 'show':
+            return self.show_host(args)
+        elif args.host_action == 'list':
+            return self.list_hosts(args)
+        else:
+            print(f"Unknown host action: {args.host_action}")
+            return False
+
+    def create_host(self, args):
+        """Create a new host."""
+        try:
+            with self.manager.safe_operation(f"create_host_{args.name}"):
+                # Parse additional properties
+                properties = {}
+                if args.properties:
+                    for prop in args.properties:
+                        if '=' in prop:
+                            key, value = prop.split('=', 1)
+                            properties[key] = value
+
+                # Create host
+                host = self.manager.create_host(
+                    args.name,
+                    args.address,
+                    alias=args.alias or args.name,
+                    overwrite=args.force,
+                    **properties
+                )
+
+                if host.save():
+                    print(f"Host '{args.name}' created successfully")
+
+                    if args.reload and self.manager.validator.validate_syntax():
+                        if self.manager.reload_nagios():
+                            print("Nagios configuration reloaded")
+                        else:
+                            print("Warning: Failed to reload Nagios")
+                    return True
+                else:
+                    print(f"Failed to save host '{args.name}'")
+                    return False
+
+        except (NagiosManagerError, ConfigValidationError) as e:
+            print(f"Error creating host: {e}")
+            return False
+
+    def delete_host(self, args):
+        """Delete a host."""
+        try:
+            host = self.manager.create_host(args.name, "", overwrite=args.force)
+
+            if host.delete():
+                print(f"Host '{args.name}' deleted successfully")
+
+                if args.reload and self.manager.validator.validate_syntax():
+                    if self.manager.reload_nagios():
+                        print("Nagios configuration reloaded")
+                return True
+            else:
+                print(f"Failed to delete host '{args.name}'")
+                return False
+
+        except NagiosManagerError as e:
+            print(f"Error deleting host: {e}")
+            return False
+
+    def show_host(self, args):
+        """Show host configuration."""
+        try:
+            host = self.manager.create_host(args.name, "")
+            config = host.display()
+
+            if args.path:
+                print(f"Path: {host.filepath}")
+
+            print(config)
+            return True
+
+        except NagiosManagerError as e:
+            print(f"Error showing host: {e}")
+            return False
+
+    def list_hosts(self, args):
+        """List all hosts."""
+        hosts = self.manager.list_objects('host')
+
+        if not hosts:
+            print("No hosts found")
+        else:
+            print(f"Found {len(hosts)} host(s):")
+            for host in hosts:
+                print(f"  - {host}")
+
+        return True
+
+    def handle_service_commands(self, args):
+        """Handle service-related commands."""
+        if args.service_action == 'create':
+            return self.create_service(args)
+        elif args.service_action == 'delete':
+            return self.delete_service(args)
+        elif args.service_action == 'show':
+            return self.show_service(args)
+        elif args.service_action == 'list':
+            return self.list_services(args)
+        else:
+            print(f"Unknown service action: {args.service_action}")
+            return False
+
+    def create_service(self, args):
+        """Create a new service."""
+        try:
+            with self.manager.safe_operation(f"create_service_{args.name}"):
+                properties = {
+                    'host_name': args.host_name,
+                    'service_description': args.description or args.name
+                }
+
+                if args.check_command:
+                    properties['check_command'] = args.check_command
+
+                # Parse additional properties
+                if args.properties:
+                    for prop in args.properties:
+                        if '=' in prop:
+                            key, value = prop.split('=', 1)
+                            properties[key] = value
+
+                service = self.manager.create_service(
+                    args.name,
+                    overwrite=args.force,
+                    **properties
+                )
+
+                if service.save():
+                    print(f"Service '{args.name}' created successfully")
+
+                    if args.reload and self.manager.validator.validate_syntax():
+                        if self.manager.reload_nagios():
+                            print("Nagios configuration reloaded")
+                    return True
+                else:
+                    print(f"Failed to save service '{args.name}'")
+                    return False
+
+        except (NagiosManagerError, ConfigValidationError) as e:
+            print(f"Error creating service: {e}")
+            return False
+
+    def delete_service(self, args):
+        """Delete a service."""
+        try:
+            service = self.manager.create_service(args.name, overwrite=args.force)
+
+            if service.delete():
+                print(f"Service '{args.name}' deleted successfully")
+
+                if args.reload and self.manager.validator.validate_syntax():
+                    if self.manager.reload_nagios():
+                        print("Nagios configuration reloaded")
+                return True
+            else:
+                print(f"Failed to delete service '{args.name}'")
+                return False
+
+        except NagiosManagerError as e:
+            print(f"Error deleting service: {e}")
+            return False
+
+    def show_service(self, args):
+        """Show service configuration."""
+        try:
+            service = self.manager.create_service(args.name)
+            config = service.display()
+
+            if args.path:
+                print(f"Path: {service.filepath}")
+
+            print(config)
+            return True
+
+        except NagiosManagerError as e:
+            print(f"Error showing service: {e}")
+            return False
+
+    def list_services(self, args):
+        """List all services."""
+        services = self.manager.list_objects('service')
+
+        if not services:
+            print("No services found")
+        else:
+            print(f"Found {len(services)} service(s):")
+            for service in services:
+                print(f"  - {service}")
+
+        return True
+
+    def handle_command_commands(self, args):
+        """Handle command-related commands."""
+        if args.command_action == 'create':
+            return self.create_command(args)
+        elif args.command_action == 'delete':
+            return self.delete_command(args)
+        elif args.command_action == 'show':
+            return self.show_command(args)
+        elif args.command_action == 'list':
+            return self.list_commands(args)
+        else:
+            print(f"Unknown command action: {args.command_action}")
+            return False
+
+    def create_command(self, args):
+        """Create a new command."""
+        try:
+            with self.manager.safe_operation(f"create_command_{args.name}"):
+                command = self.manager.create_command(
+                    args.name,
+                    args.command_line,
+                    overwrite=args.force
+                )
+
+                if command.save():
+                    print(f"Command '{args.name}' created successfully")
+
+                    if args.reload and self.manager.validator.validate_syntax():
+                        if self.manager.reload_nagios():
+                            print("Nagios configuration reloaded")
+                    return True
+                else:
+                    print(f"Failed to save command '{args.name}'")
+                    return False
+
+        except (NagiosManagerError, ConfigValidationError) as e:
+            print(f"Error creating command: {e}")
+            return False
+
+    def delete_command(self, args):
+        """Delete a command."""
+        try:
+            command = self.manager.create_command(args.name, "", overwrite=args.force)
+
+            if command.delete():
+                print(f"Command '{args.name}' deleted successfully")
+
+                if args.reload and self.manager.validator.validate_syntax():
+                    if self.manager.reload_nagios():
+                        print("Nagios configuration reloaded")
+                return True
+            else:
+                print(f"Failed to delete command '{args.name}'")
+                return False
+
+        except NagiosManagerError as e:
+            print(f"Error deleting command: {e}")
+            return False
+
+    def show_command(self, args):
+        """Show command configuration."""
+        try:
+            command = self.manager.create_command(args.name, "")
+            config = command.display()
+
+            if args.path:
+                print(f"Path: {command.filepath}")
+
+            print(config)
+            return True
+
+        except NagiosManagerError as e:
+            print(f"Error showing command: {e}")
+            return False
+
+    def list_commands(self, args):
+        """List all commands."""
+        commands = self.manager.list_objects('command')
+
+        if not commands:
+            print("No commands found")
+        else:
+            print(f"Found {len(commands)} command(s):")
+            for command in commands:
+                print(f"  - {command}")
+
+        return True
+
+    def handle_backup_commands(self, args):
+        """Handle backup-related commands."""
+        if args.backup_action == 'create':
+            return self.create_backup(args)
+        elif args.backup_action == 'list':
+            return self.list_backups(args)
+        elif args.backup_action == 'restore':
+            return self.restore_backup(args)
+        else:
+            print(f"Unknown backup action: {args.backup_action}")
+            return False
+
+    def create_backup(self, args):
+        """Create a configuration backup."""
+        try:
+            backup_path = self.manager.backup_manager.create_backup(args.description)
+            print(f"Backup created: {backup_path}")
+            return True
+        except BackupError as e:
+            print(f"Error creating backup: {e}")
+            return False
+
+    def list_backups(self, args):
+        """List available backups."""
+        backups = self.manager.backup_manager.list_backups()
+
+        if not backups:
+            print("No backups found")
+        else:
+            print(f"Found {len(backups)} backup(s):")
+            for backup in backups:
+                print(f"  {backup['timestamp']} - {backup['description']} ({backup['path']})")
+
+        return True
+
+    def restore_backup(self, args):
+        """Restore from backup."""
+        try:
+            backup_path = Path(args.backup_path)
+            self.manager.backup_manager.restore_backup(backup_path)
+            print(f"Configuration restored from: {backup_path}")
+            return True
+        except BackupError as e:
+            print(f"Error restoring backup: {e}")
+            return False
+
+    def validate_config(self, args):
+        """Validate Nagios configuration."""
+        if self.manager.validator.validate_syntax():
+            print("Configuration validation passed")
+            return True
+        else:
+            print("Configuration validation failed")
+            return False
+
+    def reload_nagios(self, args):
+        """Reload Nagios configuration."""
+        if not args.skip_validation:
+            if not self.manager.validator.validate_syntax():
+                print("Cannot reload: Configuration validation failed")
+                return False
+
+        if self.manager.reload_nagios():
+            print("Nagios configuration reloaded successfully")
+            return True
+        else:
+            print("Failed to reload Nagios configuration")
+            return False
+
+
+def create_parser():
+    """Create the argument parser."""
+    parser = argparse.ArgumentParser(
+        description='Nagios Configuration Manager CLI',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s host create web-server 192.168.1.100 --alias "Web Server"
+  %(prog)s service create http-check --host-name web-server --check-command check_http
+  %(prog)s command create check_custom --command-line "/usr/local/bin/check_custom.sh"
+  %(prog)s backup create --description "Before maintenance"
+  %(prog)s validate
+  %(prog)s reload
+        """
+    )
+
+    # Global options
+    parser.add_argument('--nagios-dir', help='Nagios installation directory')
+    parser.add_argument('--objects-dir', help='Nagios objects directory')
+    parser.add_argument('--templates-dir', help='Nagios templates directory')
+    parser.add_argument('--backup-dir', help='Backup directory')
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                        default='INFO', help='Logging level')
+    parser.add_argument('--force', '-f', action='store_true',
+                        help='Force operation without prompts')
+
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+
+    # Host commands
+    host_parser = subparsers.add_parser('host', help='Host management')
+    host_subparsers = host_parser.add_subparsers(dest='host_action')
+
+    host_create = host_subparsers.add_parser('create', help='Create a new host')
+    host_create.add_argument('name', help='Host name')
+    host_create.add_argument('address', help='Host IP address')
+    host_create.add_argument('--alias', help='Host alias')
+    host_create.add_argument('--properties', '-p', action='append',
+                             help='Additional properties (key=value)')
+    host_create.add_argument('--reload', '-r', action='store_true',
+                             help='Reload Nagios after creation')
+
+    host_delete = host_subparsers.add_parser('delete', help='Delete a host')
+    host_delete.add_argument('name', help='Host name')
+    host_delete.add_argument('--reload', '-r', action='store_true',
+                             help='Reload Nagios after deletion')
+
+    host_show = host_subparsers.add_parser('show', help='Show host configuration')
+    host_show.add_argument('name', help='Host name')
+    host_show.add_argument('--path', action='store_true',
+                           help='Show file path')
+
+    host_list = host_subparsers.add_parser('list', help='List all hosts')
+
+    # Service commands
+    service_parser = subparsers.add_parser('service', help='Service management')
+    service_subparsers = service_parser.add_subparsers(dest='service_action')
+
+    service_create = service_subparsers.add_parser('create', help='Create a new service')
+    service_create.add_argument('name', help='Service name')
+    service_create.add_argument('--host-name', required=True, help='Host name')
+    service_create.add_argument('--description', help='Service description')
+    service_create.add_argument('--check-command', help='Check command')
+    service_create.add_argument('--properties', '-p', action='append',
+                                help='Additional properties (key=value)')
+    service_create.add_argument('--reload', '-r', action='store_true',
+                                help='Reload Nagios after creation')
+
+    service_delete = service_subparsers.add_parser('delete', help='Delete a service')
+    service_delete.add_argument('name', help='Service name')
+    service_delete.add_argument('--reload', '-r', action='store_true',
+                                help='Reload Nagios after deletion')
+
+    service_show = service_subparsers.add_parser('show', help='Show service configuration')
+    service_show.add_argument('name', help='Service name')
+    service_show.add_argument('--path', action='store_true',
+                              help='Show file path')
+
+    service_list = service_subparsers.add_parser('list', help='List all services')
+
+    # Command commands
+    command_parser = subparsers.add_parser('command', help='Command management')
+    command_subparsers = command_parser.add_subparsers(dest='command_action')
+
+    command_create = command_subparsers.add_parser('create', help='Create a new command')
+    command_create.add_argument('name', help='Command name')
+    command_create.add_argument('command_line', help='Command line')
+    command_create.add_argument('--reload', '-r', action='store_true',
+                                help='Reload Nagios after creation')
+
+    command_delete = command_subparsers.add_parser('delete', help='Delete a command')
+    command_delete.add_argument('name', help='Command name')
+    command_delete.add_argument('--reload', '-r', action='store_true',
+                                help='Reload Nagios after deletion')
+
+    command_show = command_subparsers.add_parser('show', help='Show command configuration')
+    command_show.add_argument('name', help='Command name')
+    command_show.add_argument('--path', action='store_true',
+                              help='Show file path')
+
+    command_list = command_subparsers.add_parser('list', help='List all commands')
+
+    # Backup commands
+    backup_parser = subparsers.add_parser('backup', help='Backup management')
+    backup_subparsers = backup_parser.add_subparsers(dest='backup_action')
+
+    backup_create = backup_subparsers.add_parser('create', help='Create a backup')
+    backup_create.add_argument('--description', help='Backup description')
+
+    backup_list = backup_subparsers.add_parser('list', help='List available backups')
+
+    backup_restore = backup_subparsers.add_parser('restore', help='Restore from backup')
+    backup_restore.add_argument('backup_path', help='Path to backup directory')
+
+    # Utility commands
+    subparsers.add_parser('validate', help='Validate Nagios configuration')
+
+    reload_parser = subparsers.add_parser('reload', help='Reload Nagios configuration')
+    reload_parser.add_argument('--skip-validation', action='store_true',
+                               help='Skip validation before reload')
+
+    return parser
+
+
+def main():
+    """Main entry point."""
+    parser = create_parser()
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    cli = NagiosCLI()
+
+    try:
+        cli.setup_manager(args)
+    except Exception as e:
+        print(f"Error initializing manager: {e}")
+        return 1
+
+    success = False
+
+    try:
+        if args.command == 'host':
+            success = cli.handle_host_commands(args)
+        elif args.command == 'service':
+            success = cli.handle_service_commands(args)
+        elif args.command == 'command':
+            success = cli.handle_command_commands(args)
+        elif args.command == 'backup':
+            success = cli.handle_backup_commands(args)
+        elif args.command == 'validate':
+            success = cli.validate_config(args)
+        elif args.command == 'reload':
+            success = cli.reload_nagios(args)
+        else:
+            print(f"Unknown command: {args.command}")
+            return 1
+
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return 1
+
+    return 0 if success else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

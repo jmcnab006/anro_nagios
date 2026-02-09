@@ -1,0 +1,11 @@
+{{ ansible_managed | comment }}
+
+{% for key, value in anro_nagios_config_full.items() %}
+{% if key == "cfg_dir" %}
+{% for line in value %}
+{{ key }}={{ line }}
+{% endfor %}
+{% else %}
+{{ key }}={{ value }}
+{% endif %}
+{% endfor %}
