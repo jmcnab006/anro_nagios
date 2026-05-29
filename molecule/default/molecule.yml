@@ -17,11 +17,9 @@ platforms:
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     exposed_ports:
-      - 80
       - 443
     published_ports:
-      #- 8080:80
-      - 8080:443
+      - 8081:443
 
   - name: anro-nagios-ubuntu2204
     image: geerlingguy/docker-ubuntu2204-ansible:latest
@@ -32,10 +30,9 @@ platforms:
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     exposed_ports:
-      - 80
       - 443
     published_ports:
-      - 8081:443
+      - 8082:443
 
 provisioner:
   name: ansible
