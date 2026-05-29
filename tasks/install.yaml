@@ -62,7 +62,7 @@
     group: root
     mode: "0644"
   notify:
-    - "Restart postfix"
+    - "Restart anro_nagios postfix"
 
 - name: INSTALL | Install additional packages
   ansible.builtin.apt:

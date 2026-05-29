@@ -15,7 +15,7 @@
 
 - name: CONFIGURE | Apache
   notify:
-    - "Test apache"
+    - "Test anro_nagios apache"
   block:
     - name: CONFIGURE | Enable apache2 modules
       community.general.apache2_module:
@@ -79,7 +79,7 @@
 
 - name: CONFIGURE | Nagios
   notify:
-    - "Test nagios"
+    - "Test anro_nagios nagios"
   block:
     - name: CONFIGURE | Nagios symlink nagios4 to nagios in /etc
       ansible.builtin.file:

@@ -1,5 +1,5 @@
-{% set warn_load = (ansible_processor_vcpus*0.8)|int|float %}
-{% set crit_load = (ansible_processor_vcpus*0.9)|int|float %}
+{% set warn_load = (ansible_facts["processor_vcpus"]*0.8)|int|float %}
+{% set crit_load = (ansible_facts["processor_vcpus"]*0.9)|int|float %}
 define host {
     use                     linux-server            ; Name of host template to use
                                                     ; This host definition will inherit all variables that are defined

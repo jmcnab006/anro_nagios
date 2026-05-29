@@ -8,7 +8,7 @@
     - '"Syntax OK" in apache_test.stderr'
     - apache_test.rc == 0
   notify:
-    - "Reload apache"
+    - "Reload anro_nagios apache"
 
 - name: Reload anro_nagios apache
   ansible.builtin.systemd_service:
@@ -22,7 +22,7 @@
   delay: 2
 
 - name: Test anro_nagios nagios
-  ansible.builtin.command: "{{ usi_nagios_binary }} -v {{ usi_nagios_config_file }}"
+  ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_config_file }}"
   register: nagios_test
   failed_when:
     - '"Total Errors:   0" not in nagios_test.stderr'
@@ -31,9 +31,9 @@
     - '"Total Errors:   0" in nagios_test.stderr'
     - nagios_test.rc == 0
   notify:
-    - "Reload nagios"
+    - "Reload anro_nagios nagios"
 
-- name: Reload anro_nagios apache
+- name: Reload anro_nagios nagios
   ansible.builtin.systemd_service:
     name: nagios
     state: reloaded
