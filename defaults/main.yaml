@@ -1,8 +1,6 @@
 anro_nagios_install: true
 anro_nagios_domain: "example.com"
 anro_nagios_service: 'nagios4.service'
-# anro_nagios_service_user: 'nagios'
-# anro_nagios_service_group: 'nagios'
 
 anro_nagios_force: false
 
@@ -17,7 +15,6 @@ anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
 anro_nagios_add_packages: []
 anro_nagios_remove_packages: []
 
-# anro_nagios_nagios_httpd_conf: /etc/apache2/sites-available
 anro_nagios_auth_realm: "monitoring"
 anro_nagios_htpasswd_file: /etc/nagios4/htpassword.users
 

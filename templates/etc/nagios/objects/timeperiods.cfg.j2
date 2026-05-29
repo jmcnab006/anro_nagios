@@ -1,0 +1,13 @@
+{{ ansible_managed | comment }}
+
+{% if anro_nagios_timeperiod_templates_full is defined and
+      anro_nagios_timeperiod_templates_full | length > 0 %}
+{% for period in anro_nagios_timeperiod_templates_full %}
+define timeperiod {
+{% for key, value in period.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+}
+{% endfor %}
+
+{% endif %}

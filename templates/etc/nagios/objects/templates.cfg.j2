@@ -1,6 +1,69 @@
-#jinja2:lstrip_blocks: True
+{{ ansible_managed | comment }}
+
+{# Host Template Definitions #}
+{% if anro_nagios_host_templates_full is defined and
+      anro_nagios_host_templates_full | length > 0 %}
+{% for host in anro_nagios_host_templates_full %}
+# HOST TEMPLATES
 define host {
-    {% for key in item%}
-    {{ "\t{0:<35}{1:<20}".format(key, item[key]) }}
-    {% endfor %}
+
+{% for key, value in host.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+
 }
+
+{% endfor %}
+
+{% endif %}
+
+{# Service Template Definitions #}
+{% if anro_nagios_service_templates_full is defined and
+      anro_nagios_service_templates_full | length > 0 %}
+{% for service in anro_nagios_service_templates_full %}
+# SERVICE TEMPLATES
+define service {
+
+{% for key, value in service.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+
+}
+
+{% endfor %}
+
+{% endif %}
+
+{# Contact Template Definitions #}
+{% if anro_nagios_contact_templates_full is defined and
+      anro_nagios_contact_templates_full | length > 0 %}
+{% for contact in anro_nagios_contact_templates_full %}
+# SERVICE TEMPLATES
+define contact {
+
+{% for key, value in contact.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+
+}
+
+{% endfor %}
+
+{% endif %}
+
+{# Contact Template Definitions #}
+{% if anro_nagios_contactgroup_templates_full is defined and
+      anro_nagios_contactgroup_templates_full | length > 0 %}
+{% for contactgroup in anro_nagios_contactgroup_templates_full %}
+# SERVICE TEMPLATES
+define contact {
+
+{% for key, value in contactgroup.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+
+}
+
+{% endfor %}
+
+{% endif %}

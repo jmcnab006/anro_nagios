@@ -1,12 +1,12 @@
 - name: Test anro_nagios apache
   ansible.builtin.command: 'apachectl configtest'
-  register: apache_test
+  register: _anro_nagios_apache_test
   failed_when:
-    - '"Syntax OK" not in apache_test.stderr'
-    - apache_test.rc != 0
+    - '"Syntax OK" not in _anro_nagios_apache_test.stderr'
+    - _anro_nagios_apache_test.rc != 0
   changed_when:
-    - '"Syntax OK" in apache_test.stderr'
-    - apache_test.rc == 0
+    - '"Syntax OK" in _anro_nagios_apache_test.stderr'
+    - _anro_nagios_apache_test.rc == 0
   notify:
     - "Reload anro_nagios apache"
 
@@ -16,30 +16,31 @@
     state: reloaded
   listen: certificate updated
   throttle: 1
-  register: apache_reload
-  until: apache_reload is succeeded
+  register: _anro_nagios_apache_reload
+  until: _anro_nagios_apache_reload is succeeded
   retries: 5
   delay: 2
 
 - name: Test anro_nagios nagios
   ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_config_file }}"
-  register: nagios_test
+  register: _anro_nagios_nagios_test
   failed_when:
-    - '"Total Errors:   0" not in nagios_test.stderr'
-    - nagios_test.rc != 0
+    - '"Total Errors:   0" not in _anro_nagios_nagios_test.stderr'
+    - _anro_nagios_nagios_test.rc != 0
   changed_when:
-    - '"Total Errors:   0" in nagios_test.stderr'
-    - nagios_test.rc == 0
+    - '"Total Errors:   0" in _anro_nagios_nagios_test.stderr'
+    - _anro_nagios_nagios_test.rc == 0
   notify:
     - "Reload anro_nagios nagios"
+    - "Service anro_nagios started"
 
 - name: Reload anro_nagios nagios
   ansible.builtin.systemd_service:
-    name: nagios
+    name: "{{ anro_nagios_service }}"
     state: reloaded
   throttle: 1
-  register: nagios_reload
-  until: nagios_reload is succeeded
+  register: _anro_nagios_nagios_reload
+  until: _anro_nagios_nagios_reload is succeeded
   retries: 5
   delay: 2
 

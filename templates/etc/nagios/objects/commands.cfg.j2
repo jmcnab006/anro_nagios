@@ -1,0 +1,13 @@
+{{ ansible_managed | comment }}
+
+{% if anro_nagios_commands_full is defined and
+      anro_nagios_commands_full | length > 0 %}
+{% for command in anro_nagios_commands_full %}
+define command {
+{% for key, value in command.items() %}
+    {{ "%-30s"|format(key) }} {{ value }}
+{% endfor %}
+}
+{% endfor %}
+
+{% endif %}

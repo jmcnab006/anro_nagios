@@ -6,7 +6,7 @@
     anro_nagios_domain: vacuus.biz
     anro_nagios_users:
       - name: jmcnab
-        password: "changme"
+        password: 'changeme'
   roles:
     - role: anro_nagios
 
