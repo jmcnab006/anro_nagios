@@ -1,0 +1,37 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Confirm host is reachable
+      ansible.builtin.ping:
+
+    - name: Check nagios.cfg exists
+      ansible.builtin.stat:
+        path: /etc/nagios/nagios.cfg
+      register: cfg
+
+    - name: Validate nagios.cfg exists
+      ansible.builtin.assert:
+        that:
+          - cfg.stat.exists
+          - cfg.stat.isreg
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+#    - name: Debug ansible_facts
+#      ansible.builtin.debug:
+#        var: ansible_facts["services"]
+
+    - name: Verify nagios service exists
+      ansible.builtin.assert:
+        that:
+          - '"nagios4.service" in ansible_facts["services"]'
+        fail_msg: "nagios4.service was not found"
+
+    - name: Verify nagios service running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['nagios4.service'].state == 'running'
+        fail_msg: "nagios4.service is not running"

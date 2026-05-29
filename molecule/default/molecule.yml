@@ -1,0 +1,52 @@
+---
+role_name_check: 1
+
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: anro-nagios-ubuntu2404
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    exposed_ports:
+      - 80
+      - 443
+    published_ports:
+      #- 8080:80
+      - 8080:443
+
+  - name: anro-nagios-ubuntu2204
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    exposed_ports:
+      - 80
+      - 443
+    published_ports:
+      - 8081:443
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      roles_path: /home/jmcnab/git/
+
+verifier:
+  name: ansible
+
+lint: |
+  set -e
+  yamllint .
+  ansible-lint .
