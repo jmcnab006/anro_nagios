@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
 """
-nagios-cmd: manage custom Nagios object configuration.
+nagios-cmd
 
-Designed for an Ansible-owned baseline where objects/*.cfg are managed by Ansible
-and custom files live below objects/<type>/ and objects/hosts/<hostgroup>/.
+Manage custom Nagios configuration while keeping Ansible-owned defaults separate.
+
+Writes only to custom configuration directories under:
+  /etc/nagios/objects/<type>/
+  /etc/nagios/objects/hosts/<hostgroup>/
+  /etc/nagios/servicedefs/
+
+Does not modify Ansible-managed defaults such as:
+  /etc/nagios/objects/commands.cfg
+  /etc/nagios/objects/templates.cfg
+  /etc/nagios/objects/contacts.cfg
+  /etc/nagios/objects/timeperiods.cfg
+
+Environment overrides:
+  NAGIOS_BASE       default: /etc/nagios if present, else /etc/nagios4
+  NAGIOS_CFG        default: $NAGIOS_BASE/nagios.cfg
+  NAGIOS_BIN        default: /usr/sbin/nagios4
+  NAGIOS_SERVICE    default: nagios4
 """
+
 from __future__ import annotations
 
 import argparse
@@ -15,11 +32,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
-DEFAULT_OBJECTS = {"commands.cfg", "contacts.cfg", "templates.cfg", "timeperiods.cfg", "localhost.cfg"}
-OBJECT_TYPES = {"host", "hostgroup", "service", "command", "template", "timeperiod", "contact", "config"}
-ACTIONS = {"add", "show", "remove", "check", "reload"}
+DEFAULT_HOSTGROUP = "default"
+SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def detect_base() -> Path:
@@ -32,399 +48,491 @@ def detect_base() -> Path:
 
 
 BASE = detect_base()
-OBJECTS_DIR = Path(os.environ.get("NAGIOS_OBJECTS", str(BASE / "objects")))
-SERVICEDEFS_DIR = Path(os.environ.get("NAGIOS_SERVICEDEFS", str(BASE / "servicedefs")))
 NAGIOS_CFG = Path(os.environ.get("NAGIOS_CFG", str(BASE / "nagios.cfg")))
-NAGIOS_BIN = os.environ.get("NAGIOS_BIN", shutil.which("nagios4") or shutil.which("nagios") or "/usr/sbin/nagios4")
+NAGIOS_BIN = os.environ.get("NAGIOS_BIN", "/usr/sbin/nagios4")
 NAGIOS_SERVICE = os.environ.get("NAGIOS_SERVICE", "nagios4")
 
+OBJECTS_DIR = BASE / "objects"
+HOSTS_DIR = OBJECTS_DIR / "hosts"
+SERVICEDEFS_DIR = BASE / "servicedefs"
 
-def die(msg: str, rc: int = 1) -> None:
-    print(f"ERROR: {msg}", file=sys.stderr)
-    raise SystemExit(rc)
+CUSTOM_DIRS = {
+    "command": OBJECTS_DIR / "commands",
+    "template": OBJECTS_DIR / "templates",
+    "timeperiod": OBJECTS_DIR / "timeperiods",
+    "contact": OBJECTS_DIR / "contacts",
+}
 
 
-def parse_opts(items: Optional[str]) -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    if not items:
-        return out
-    for item in items.split(","):
-        item = item.strip()
-        if not item:
+class NagiosCmdError(Exception):
+    pass
+
+
+def die(message: str, code: int = 1) -> None:
+    print(f"ERROR: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def validate_safe_name(value: str, label: str = "name") -> str:
+    if not value:
+        die(f"{label} cannot be empty")
+    if "/" in value or value in {".", ".."} or not SAFE_NAME_RE.match(value):
+        die(f"invalid {label}: {value!r}; allowed characters: letters, numbers, dot, underscore, dash")
+    return value
+
+
+def parse_options(option_string: Optional[str]) -> Dict[str, str]:
+    options: Dict[str, str] = {}
+    if not option_string:
+        return options
+    for raw_part in option_string.split(","):
+        part = raw_part.strip()
+        if not part:
             continue
-        if "=" not in item:
-            die(f"invalid -o item {item!r}; expected key=value")
-        key, value = item.split("=", 1)
+        if "=" not in part:
+            die(f"invalid option {part!r}; expected key=value")
+        key, value = part.split("=", 1)
         key = key.strip()
         value = value.strip()
-        if not re.match(r"^[A-Za-z0-9_]+$", key):
-            die(f"invalid Nagios directive name {key!r}")
-        out[key] = value
-    return out
+        if not key:
+            die(f"invalid option {part!r}; key cannot be empty")
+        options[key] = value
+    return options
 
 
-def safe_name(name: str, field: str = "name") -> str:
-    if not re.match(r"^[A-Za-z0-9_.-]+$", name):
-        die(f"invalid {field} {name!r}; allowed: letters, numbers, underscore, dot, dash")
-    return name
+def ensure_layout() -> None:
+    for path in [OBJECTS_DIR, HOSTS_DIR, SERVICEDEFS_DIR, *CUSTOM_DIRS.values(), HOSTS_DIR / DEFAULT_HOSTGROUP]:
+        path.mkdir(parents=True, exist_ok=True)
 
 
-def ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        die(f"file not found: {path}")
 
 
-def render_define(kind: str, attrs: Dict[str, str]) -> str:
-    width = max([len(k) for k in attrs] + [0])
-    lines = [f"define {kind} {{"]
-    for key, value in attrs.items():
-        lines.append(f"    {key.ljust(width)}    {value}")
+def run_command(cmd: List[str], check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=check)
+
+
+def validate_config() -> None:
+    if not Path(NAGIOS_BIN).exists():
+        die(f"Nagios binary not found: {NAGIOS_BIN}")
+    if not NAGIOS_CFG.exists():
+        die(f"Nagios config not found: {NAGIOS_CFG}")
+    result = run_command([NAGIOS_BIN, "-v", str(NAGIOS_CFG)], check=False)
+    if result.returncode != 0:
+        raise NagiosCmdError(result.stdout.strip())
+
+
+def reload_nagios() -> None:
+    result = run_command(["systemctl", "reload", NAGIOS_SERVICE], check=False)
+    if result.returncode != 0:
+        die(result.stdout.strip() or f"failed to reload {NAGIOS_SERVICE}")
+
+
+def atomic_write(path: Path, content: str, mode: int = 0o644, validate: bool = True) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old_content = path.read_text(encoding="utf-8") if path.exists() else None
+    existed = path.exists()
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(path.parent), delete=False) as fh:
+        tmp_path = Path(fh.name)
+        fh.write(content)
+    os.chmod(tmp_path, mode)
+    shutil.move(str(tmp_path), str(path))
+    if validate:
+        try:
+            validate_config()
+        except Exception:
+            if existed and old_content is not None:
+                path.write_text(old_content, encoding="utf-8")
+                os.chmod(path, mode)
+            else:
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+            raise
+
+
+def object_block(object_type: str, fields: Dict[str, str]) -> str:
+    lines = [f"define {object_type} {{"]
+    for key, value in fields.items():
+        lines.append(f"    {key:<28} {value}")
     lines.append("}")
     return "\n".join(lines) + "\n"
 
 
-def atomic_write(path: Path, content: str, mode: int = 0o644, validate: bool = True) -> None:
-    ensure_dir(path.parent)
-    old = path.read_text() if path.exists() else None
-    fd, tmpname = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent), text=True)
-    tmp = Path(tmpname)
-    try:
-        with os.fdopen(fd, "w") as fh:
-            fh.write(content)
-        os.chmod(tmp, mode)
-        tmp.replace(path)
-        if validate:
-            ok = run_check(silent=True)
-            if not ok:
-                if old is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    path.write_text(old)
-                    os.chmod(path, mode)
-                die("Nagios validation failed; change was rolled back")
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-def run_check(silent: bool = False) -> bool:
-    cmd = [NAGIOS_BIN, "-v", str(NAGIOS_CFG)]
-    proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if not silent:
-        print(proc.stdout.rstrip())
-    return proc.returncode == 0
-
-
-def reload_service() -> None:
-    if not run_check():
-        die("not reloading because validation failed")
-    subprocess.run(["systemctl", "reload", NAGIOS_SERVICE], check=True)
-    print(f"reloaded {NAGIOS_SERVICE}")
-
-
-def object_blocks(text: str) -> Iterable[Tuple[str, Dict[str, str]]]:
-    for match in re.finditer(r"define\s+(\w+)\s*\{(.*?)\}", text, re.S):
-        kind = match.group(1)
+def parse_nagios_blocks(text: str) -> List[Tuple[str, Dict[str, str]]]:
+    blocks: List[Tuple[str, Dict[str, str]]] = []
+    pattern = re.compile(r"define\s+(\w+)\s*\{(.*?)\}", re.DOTALL)
+    for match in pattern.finditer(text):
+        obj_type = match.group(1)
         body = match.group(2)
-        attrs: Dict[str, str] = {}
-        for raw in body.splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or line.startswith(";"):
+        fields: Dict[str, str] = {}
+        for raw_line in body.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
                 continue
             parts = line.split(None, 1)
             if len(parts) == 2:
-                attrs[parts[0]] = parts[1].strip()
-        yield kind, attrs
+                fields[parts[0]] = parts[1].strip()
+        blocks.append((obj_type, fields))
+    return blocks
 
 
-def scan_cfg_files() -> Iterable[Path]:
-    if not OBJECTS_DIR.exists():
+def iter_cfg_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
         return []
-    return sorted(OBJECTS_DIR.rglob("*.cfg"))
+    return sorted(root.rglob("*.cfg"))
 
 
-def print_table(rows: List[Tuple[str, ...]], headers: Tuple[str, ...]) -> None:
-    if not rows:
-        print("No entries found")
-        return
-    widths = [len(h) for h in headers]
-    for row in rows:
-        widths = [max(w, len(str(cell))) for w, cell in zip(widths, row)]
-    print("  ".join(h.ljust(w) for h, w in zip(headers, widths)))
-    print("  ".join("-" * w for w in widths))
-    for row in rows:
-        print("  ".join(str(c).ljust(w) for c, w in zip(row, widths)))
-
-
-def hostgroup_dir(group: str) -> Path:
-    return OBJECTS_DIR / "hosts" / safe_name(group, "hostgroup")
-
-
-def host_file(group: str, hostname: str) -> Path:
-    return hostgroup_dir(group) / f"{safe_name(hostname, 'hostname')}.cfg"
-
-
-def ensure_hostgroup(group: str, validate: bool = True) -> Path:
-    group = safe_name(group, "hostgroup")
-    d = hostgroup_dir(group)
-    ensure_dir(d)
-    cfg = d / "hostgroup.cfg"
-    if not cfg.exists():
-        content = render_define("hostgroup", {"hostgroup_name": group, "alias": group})
-        atomic_write(cfg, content, validate=validate)
-    return cfg
-
-
-def cmd_hostgroup_add(args: argparse.Namespace) -> None:
-    path = ensure_hostgroup(args.name)
-    print(path)
-
-
-def cmd_hostgroup_show(args: argparse.Namespace) -> None:
-    rows = []
-    for path in scan_cfg_files():
-        for kind, attrs in object_blocks(path.read_text(errors="replace")):
-            if kind == "hostgroup":
-                name = attrs.get("hostgroup_name", "")
-                if args.name and name != args.name:
-                    continue
-                rows.append((name, str(path)))
-    print_table(rows, ("hostgroup", "file"))
-
-
-def cmd_host_add(args: argparse.Namespace) -> None:
-    group = args.group or "default"
-    hostname = safe_name(args.hostname, "hostname")
-    ensure_hostgroup(group, validate=False)
-    attrs = {"host_name": hostname, "address": args.address, "hostgroups": group}
-    attrs.update(parse_opts(args.options))
-    if "use" not in attrs:
-        attrs["use"] = "generic-host"
-    path = host_file(group, hostname)
-    if path.exists() and not args.force:
-        die(f"host file already exists: {path}; use --force to overwrite")
-    atomic_write(path, render_define("host", attrs))
-    print(path)
-
-
-def cmd_host_show(args: argparse.Namespace) -> None:
-    rows = []
-    for path in scan_cfg_files():
-        for kind, attrs in object_blocks(path.read_text(errors="replace")):
-            if kind == "host":
-                name = attrs.get("host_name", "")
-                if args.hostname and name != args.hostname:
-                    continue
-                rows.append((name, attrs.get("address", ""), attrs.get("hostgroups", ""), str(path)))
-                if args.hostname:
-                    print(path)
-                    print(path.read_text())
-                    return
-    print_table(rows, ("host", "address", "hostgroups", "file"))
-
-
-def append_unique_block(path: Path, block: str) -> None:
-    current = path.read_text() if path.exists() else ""
-    if block.strip() in current:
-        return
-    content = current.rstrip() + "\n\n" + block.strip() + "\n"
-    atomic_write(path, content)
-
-
-def find_host_path(hostname: str) -> Optional[Path]:
-    for path in scan_cfg_files():
-        for kind, attrs in object_blocks(path.read_text(errors="replace")):
-            if kind == "host" and attrs.get("host_name") == hostname:
-                return path
+def find_host_file(hostname: str) -> Optional[Path]:
+    validate_safe_name(hostname, "hostname")
+    for path in iter_cfg_files(HOSTS_DIR):
+        if path.name == "hostgroup.cfg":
+            continue
+        if path.stem == hostname:
+            return path
     return None
 
 
-def cmd_service_show(args: argparse.Namespace) -> None:
+def ensure_hostgroup(hostgroup: str) -> Path:
+    validate_safe_name(hostgroup, "hostgroup")
+    group_dir = HOSTS_DIR / hostgroup
+    group_dir.mkdir(parents=True, exist_ok=True)
+    hostgroup_file = group_dir / "hostgroup.cfg"
+    if not hostgroup_file.exists():
+        content = object_block("hostgroup", {"hostgroup_name": hostgroup, "alias": hostgroup})
+        atomic_write(hostgroup_file, content)
+    return group_dir
+
+
+def cmd_host_add(args: argparse.Namespace) -> int:
+    ensure_layout()
+    hostname = validate_safe_name(args.hostname, "hostname")
+    hostgroup = validate_safe_name(args.hostgroup or DEFAULT_HOSTGROUP, "hostgroup")
+    if find_host_file(hostname):
+        die(f"host already exists: {hostname}")
+    group_dir = ensure_hostgroup(hostgroup)
+    fields = {
+        "use": "generic-host",
+        "host_name": hostname,
+        "alias": hostname,
+        "address": args.address,
+        "hostgroups": hostgroup,
+    }
+    fields.update(parse_options(args.options))
+    target = group_dir / f"{hostname}.cfg"
+    atomic_write(target, object_block("host", fields))
+    print(f"created host {hostname}: {target}")
+    return 0
+
+
+def cmd_host_show(args: argparse.Namespace) -> int:
+    ensure_layout()
     if args.hostname:
-        path = find_host_path(args.hostname)
+        hostname = validate_safe_name(args.hostname, "hostname")
+        path = find_host_file(hostname)
         if not path:
-            die(f"host not found: {args.hostname}")
-        print(path)
-        for kind, attrs in object_blocks(path.read_text(errors="replace")):
-            if kind == "service":
-                print(render_define(kind, attrs))
-        return
+            die(f"host not found: {hostname}")
+        print(f"File: {path}")
+        print(read_text(path).rstrip())
+        return 0
     rows = []
-    if SERVICEDEFS_DIR.exists():
-        for tpl in sorted(SERVICEDEFS_DIR.glob("*.tpl")):
-            rows.append((tpl.stem, str(tpl)))
-    print_table(rows, ("servicedef", "file"))
+    for path in iter_cfg_files(HOSTS_DIR):
+        if path.name == "hostgroup.cfg":
+            continue
+        for obj_type, fields in parse_nagios_blocks(read_text(path)):
+            if obj_type == "host":
+                rows.append((fields.get("host_name", path.stem), fields.get("address", ""), fields.get("hostgroups", ""), str(path)))
+    if not rows:
+        print("No hosts found.")
+        return 0
+    for hostname, address, hostgroups, path in sorted(rows):
+        print(f"{hostname}\t{address}\t{hostgroups}\t{path}")
+    return 0
 
 
-def cmd_service_add(args: argparse.Namespace) -> None:
-    hostname = safe_name(args.hostname, "hostname")
-    path = find_host_path(hostname)
+def cmd_host_remove(args: argparse.Namespace) -> int:
+    hostname = validate_safe_name(args.hostname, "hostname")
+    path = find_host_file(hostname)
     if not path:
         die(f"host not found: {hostname}")
-    services = [safe_name(s.strip(), "service") for s in args.services.split(",") if s.strip()]
+    old = read_text(path)
+    path.unlink()
+    try:
+        validate_config()
+    except Exception as exc:
+        path.write_text(old, encoding="utf-8")
+        die(f"validation failed, restored {path}\n{exc}")
+    print(f"removed host {hostname}: {path}")
+    return 0
+
+
+def cmd_hostgroup_add(args: argparse.Namespace) -> int:
+    ensure_layout()
+    hostgroup = validate_safe_name(args.name, "hostgroup")
+    path = ensure_hostgroup(hostgroup) / "hostgroup.cfg"
+    print(f"created hostgroup {hostgroup}: {path}")
+    return 0
+
+
+def cmd_hostgroup_show(args: argparse.Namespace) -> int:
+    ensure_layout()
+    rows = []
+    for path in sorted(HOSTS_DIR.glob("*/hostgroup.cfg")):
+        host_count = len([p for p in path.parent.glob("*.cfg") if p.name != "hostgroup.cfg"])
+        rows.append((path.parent.name, host_count, str(path)))
+    if not rows:
+        print("No hostgroups found.")
+        return 0
+    for hostgroup, host_count, path in rows:
+        print(f"{hostgroup}\t{host_count} hosts\t{path}")
+    return 0
+
+
+def cmd_hostgroup_remove(args: argparse.Namespace) -> int:
+    hostgroup = validate_safe_name(args.name, "hostgroup")
+    if hostgroup == DEFAULT_HOSTGROUP:
+        die("refusing to remove default hostgroup")
+    group_dir = HOSTS_DIR / hostgroup
+    if not group_dir.exists():
+        die(f"hostgroup not found: {hostgroup}")
+    host_files = [p for p in group_dir.glob("*.cfg") if p.name != "hostgroup.cfg"]
+    if host_files and not args.force:
+        die(f"hostgroup {hostgroup} is not empty; use --force to remove host files too")
+    backup = {p: read_text(p) for p in group_dir.glob("*.cfg")}
+    shutil.rmtree(group_dir)
+    try:
+        validate_config()
+    except Exception as exc:
+        group_dir.mkdir(parents=True, exist_ok=True)
+        for path, content in backup.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        die(f"validation failed, restored {group_dir}\n{exc}")
+    print(f"removed hostgroup {hostgroup}: {group_dir}")
+    return 0
+
+
+def cmd_service_show(args: argparse.Namespace) -> int:
+    ensure_layout()
+    templates = sorted(SERVICEDEFS_DIR.glob("*.tpl"))
+    if not templates:
+        print("No service definitions found.")
+        return 0
+    for path in templates:
+        print(path.stem)
+    return 0
+
+
+def cmd_service_add(args: argparse.Namespace) -> int:
+    ensure_layout()
+    hostname = validate_safe_name(args.hostname, "hostname")
+    host_path = find_host_file(hostname)
+    if not host_path:
+        die(f"host not found: {hostname}")
+    services = [validate_safe_name(s.strip(), "service definition") for s in args.services.split(",") if s.strip()]
     if not services:
-        die("no services supplied")
-    for svc in services:
-        tpl = SERVICEDEFS_DIR / f"{svc}.tpl"
+        die("no services specified")
+    current = read_text(host_path).rstrip() + "\n"
+    additions = []
+    for service in services:
+        marker = f"# BEGIN nagios-cmd service {service}"
+        if marker in current:
+            die(f"service {service} already appears to be present in {host_path}")
+        tpl = SERVICEDEFS_DIR / f"{service}.tpl"
         if not tpl.exists():
             die(f"service definition not found: {tpl}")
-        block = tpl.read_text()
-        block = block.replace("$HOSTNAME$", hostname).replace("{{ hostname }}", hostname)
-        append_unique_block(path, block)
-    print(path)
+        content = read_text(tpl).replace("{{ hostname }}", hostname).replace("$HOSTNAME$", hostname)
+        additions.append(f"\n# BEGIN nagios-cmd service {service}\n{content.rstrip()}\n# END nagios-cmd service {service}\n")
+    atomic_write(host_path, current + "".join(additions))
+    print(f"added services to {hostname}: {', '.join(services)}")
+    return 0
 
 
-def cmd_command_add(args: argparse.Namespace) -> None:
-    name = safe_name(args.name, "command")
-    attrs = {"command_name": name}
-    attrs.update(parse_opts(args.options))
-    if "command_line" not in attrs:
-        die("command add requires -o command_line='...' ")
-    path = OBJECTS_DIR / "commands" / f"{name}.cfg"
-    if path.exists() and not args.force:
-        die(f"command file already exists: {path}; use --force to overwrite")
-    atomic_write(path, render_define("command", attrs))
-    print(path)
+def cmd_service_remove(args: argparse.Namespace) -> int:
+    hostname = validate_safe_name(args.hostname, "hostname")
+    host_path = find_host_file(hostname)
+    if not host_path:
+        die(f"host not found: {hostname}")
+    services = [validate_safe_name(s.strip(), "service definition") for s in args.services.split(",") if s.strip()]
+    content = read_text(host_path)
+    changed = False
+    for service in services:
+        pattern = re.compile(rf"\n?# BEGIN nagios-cmd service {re.escape(service)}\n.*?\n# END nagios-cmd service {re.escape(service)}\n?", re.DOTALL)
+        content, count = pattern.subn("\n", content)
+        changed = changed or bool(count)
+    if not changed:
+        die("no matching managed service blocks found")
+    atomic_write(host_path, content.strip() + "\n")
+    print(f"removed services from {hostname}: {', '.join(services)}")
+    return 0
 
 
-def cmd_simple_show(kind: str, name_field: str, wanted: Optional[str]) -> None:
-    rows = []
-    for path in scan_cfg_files():
-        for obj_kind, attrs in object_blocks(path.read_text(errors="replace")):
-            if obj_kind == kind:
-                name = attrs.get(name_field, "")
-                if wanted and name != wanted:
-                    continue
-                rows.append((name, str(path)))
-                if wanted:
-                    print(path)
-                    print(path.read_text())
-                    return
-    print_table(rows, (kind, "file"))
+def cmd_custom_add(args: argparse.Namespace) -> int:
+    ensure_layout()
+    kind = args.kind
+    name = validate_safe_name(args.name, kind)
+    target = CUSTOM_DIRS[kind] / f"{name}.cfg"
+    if target.exists() and not args.force:
+        die(f"{kind} already exists: {target}; use --force to overwrite")
+    object_type = {"command": "command", "template": args.object_type or "host", "timeperiod": "timeperiod", "contact": "contact"}[kind]
+    name_field = {"command": "command_name", "template": "name", "timeperiod": "timeperiod_name", "contact": "contact_name"}[kind]
+    fields = {name_field: name}
+    if kind == "template":
+        fields["register"] = "0"
+    fields.update(parse_options(args.options))
+    atomic_write(target, object_block(object_type, fields))
+    print(f"created {kind} {name}: {target}")
+    return 0
 
 
-def cmd_simple_add(kind: str, subdir: str, name_field: str, args: argparse.Namespace) -> None:
-    name = safe_name(args.name, kind)
-    attrs = {name_field: name}
-    attrs.update(parse_opts(args.options))
-    path = OBJECTS_DIR / subdir / f"{name}.cfg"
-    if path.exists() and not args.force:
-        die(f"file already exists: {path}; use --force to overwrite")
-    atomic_write(path, render_define(kind, attrs))
-    print(path)
+def cmd_custom_show(args: argparse.Namespace) -> int:
+    ensure_layout()
+    kind = args.kind
+    directory = CUSTOM_DIRS[kind]
+    if args.name:
+        name = validate_safe_name(args.name, kind)
+        target = directory / f"{name}.cfg"
+        if not target.exists():
+            die(f"{kind} not found: {name}")
+        print(f"File: {target}")
+        print(read_text(target).rstrip())
+        return 0
+    files = sorted(directory.glob("*.cfg"))
+    if not files:
+        print(f"No custom {kind}s found.")
+        return 0
+    for path in files:
+        print(f"{path.stem}\t{path}")
+    return 0
 
 
-def complete(words: Sequence[str]) -> None:
-    # Called by bash completion. Keep intentionally simple and dependency-free.
-    cur = words[-1] if words else ""
-    prev = words[-2] if len(words) > 1 else ""
-    choices: List[str] = []
-    if len(words) <= 2:
-        choices = sorted(OBJECT_TYPES)
-    elif len(words) == 3:
-        obj = words[1]
-        choices = {
-            "host": ["add", "show", "remove"],
-            "hostgroup": ["add", "show", "remove"],
-            "service": ["add", "show"],
-            "command": ["add", "show"],
-            "template": ["add", "show"],
-            "timeperiod": ["add", "show"],
-            "contact": ["add", "show"],
-            "config": ["check", "reload"],
-        }.get(obj, [])
-    elif prev in {"-g", "--group"}:
-        choices = [p.name for p in (OBJECTS_DIR / "hosts").glob("*") if p.is_dir()] if (OBJECTS_DIR / "hosts").exists() else []
-    elif prev in {"-s", "--services"}:
-        choices = [p.stem for p in SERVICEDEFS_DIR.glob("*.tpl")] if SERVICEDEFS_DIR.exists() else []
-    elif words[1:3] in (["host", "show"], ["service", "add"], ["service", "show"]):
-        choices = []
-        for path in scan_cfg_files():
-            for kind, attrs in object_blocks(path.read_text(errors="replace")):
-                if kind == "host" and attrs.get("host_name"):
-                    choices.append(attrs["host_name"])
-    else:
-        choices = ["-o", "--options", "-g", "--group", "-s", "--services", "--force"]
-    for c in sorted(set(choices)):
-        if c.startswith(cur):
-            print(c)
+def cmd_custom_remove(args: argparse.Namespace) -> int:
+    kind = args.kind
+    name = validate_safe_name(args.name, kind)
+    target = CUSTOM_DIRS[kind] / f"{name}.cfg"
+    if not target.exists():
+        die(f"{kind} not found: {name}")
+    old = read_text(target)
+    target.unlink()
+    try:
+        validate_config()
+    except Exception as exc:
+        target.write_text(old, encoding="utf-8")
+        die(f"validation failed, restored {target}\n{exc}")
+    print(f"removed {kind} {name}: {target}")
+    return 0
+
+
+def cmd_config_check(args: argparse.Namespace) -> int:
+    try:
+        validate_config()
+    except NagiosCmdError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print("Nagios configuration OK")
+    return 0
+
+
+def cmd_config_reload(args: argparse.Namespace) -> int:
+    try:
+        validate_config()
+    except NagiosCmdError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    reload_nagios()
+    print(f"reloaded {NAGIOS_SERVICE}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Manage custom Nagios configuration")
-    sub = p.add_subparsers(dest="object", required=True)
+    parser = argparse.ArgumentParser(prog="nagios-cmd", description="Manage custom Nagios configuration")
+    sub = parser.add_subparsers(dest="resource", required=True)
 
-    hp = sub.add_parser("host")
-    hs = hp.add_subparsers(dest="action", required=True)
-    ha = hs.add_parser("add")
-    ha.add_argument("hostname")
-    ha.add_argument("address")
-    ha.add_argument("-g", "--group", default="default")
-    ha.add_argument("-o", "--options")
-    ha.add_argument("--force", action="store_true")
-    ha.set_defaults(func=cmd_host_add)
-    hshow = hs.add_parser("show")
-    hshow.add_argument("hostname", nargs="?")
-    hshow.set_defaults(func=cmd_host_show)
+    host = sub.add_parser("host", help="Manage hosts")
+    host_sub = host.add_subparsers(dest="action", required=True)
+    p = host_sub.add_parser("add", help="Add host")
+    p.add_argument("-g", "--hostgroup", default=DEFAULT_HOSTGROUP)
+    p.add_argument("hostname")
+    p.add_argument("address")
+    p.add_argument("-o", "--options", help="Comma-separated Nagios options, key=value,key=value")
+    p.set_defaults(func=cmd_host_add)
+    p = host_sub.add_parser("show", help="Show hosts")
+    p.add_argument("hostname", nargs="?")
+    p.set_defaults(func=cmd_host_show)
+    p = host_sub.add_parser("remove", help="Remove host")
+    p.add_argument("hostname")
+    p.set_defaults(func=cmd_host_remove)
 
-    hgp = sub.add_parser("hostgroup")
-    hgs = hgp.add_subparsers(dest="action", required=True)
-    hga = hgs.add_parser("add")
-    hga.add_argument("name")
-    hga.set_defaults(func=cmd_hostgroup_add)
-    hgshow = hgs.add_parser("show")
-    hgshow.add_argument("name", nargs="?")
-    hgshow.set_defaults(func=cmd_hostgroup_show)
+    hostgroup = sub.add_parser("hostgroup", help="Manage hostgroups")
+    hostgroup_sub = hostgroup.add_subparsers(dest="action", required=True)
+    p = hostgroup_sub.add_parser("add", help="Add hostgroup")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_hostgroup_add)
+    p = hostgroup_sub.add_parser("show", help="Show hostgroups")
+    p.set_defaults(func=cmd_hostgroup_show)
+    p = hostgroup_sub.add_parser("remove", help="Remove hostgroup")
+    p.add_argument("name")
+    p.add_argument("--force", action="store_true", help="Remove host files too")
+    p.set_defaults(func=cmd_hostgroup_remove)
 
-    sp = sub.add_parser("service")
-    ss = sp.add_subparsers(dest="action", required=True)
-    sa = ss.add_parser("add")
-    sa.add_argument("hostname")
-    sa.add_argument("-s", "--services", required=True)
-    sa.set_defaults(func=cmd_service_add)
-    sshow = ss.add_parser("show")
-    sshow.add_argument("hostname", nargs="?")
-    sshow.set_defaults(func=cmd_service_show)
+    service = sub.add_parser("service", help="Manage host service definitions")
+    service_sub = service.add_subparsers(dest="action", required=True)
+    p = service_sub.add_parser("show", help="List available service definition templates")
+    p.set_defaults(func=cmd_service_show)
+    p = service_sub.add_parser("add", help="Add service definitions to a host")
+    p.add_argument("hostname")
+    p.add_argument("-s", "--services", required=True, help="Comma-separated service definition names")
+    p.set_defaults(func=cmd_service_add)
+    p = service_sub.add_parser("remove", help="Remove managed service definitions from a host")
+    p.add_argument("hostname")
+    p.add_argument("-s", "--services", required=True, help="Comma-separated service definition names")
+    p.set_defaults(func=cmd_service_remove)
 
-    cp = sub.add_parser("command")
-    cs = cp.add_subparsers(dest="action", required=True)
-    ca = cs.add_parser("add")
-    ca.add_argument("name")
-    ca.add_argument("-o", "--options", required=True)
-    ca.add_argument("--force", action="store_true")
-    ca.set_defaults(func=cmd_command_add)
-    cshow = cs.add_parser("show")
-    cshow.add_argument("name", nargs="?")
-    cshow.set_defaults(func=lambda a: cmd_simple_show("command", "command_name", a.name))
+    for kind in ["command", "template", "timeperiod", "contact"]:
+        res = sub.add_parser(kind, help=f"Manage custom {kind}s")
+        res_sub = res.add_subparsers(dest="action", required=True)
+        p = res_sub.add_parser("add", help=f"Add custom {kind}")
+        p.add_argument("name")
+        p.add_argument("-o", "--options", help="Comma-separated Nagios options, key=value,key=value")
+        p.add_argument("--force", action="store_true", help="Overwrite if the object file exists")
+        if kind == "template":
+            p.add_argument("--object-type", choices=["host", "service", "contact"], default="host")
+        p.set_defaults(func=cmd_custom_add, kind=kind)
+        p = res_sub.add_parser("show", help=f"Show custom {kind}s")
+        p.add_argument("name", nargs="?")
+        p.set_defaults(func=cmd_custom_show, kind=kind)
+        p = res_sub.add_parser("remove", help=f"Remove custom {kind}")
+        p.add_argument("name")
+        p.set_defaults(func=cmd_custom_remove, kind=kind)
 
-    for cli, kind, field in [("template", "host", "name"), ("timeperiod", "timeperiod", "timeperiod_name"), ("contact", "contact", "contact_name")]:
-        op = sub.add_parser(cli)
-        osub = op.add_subparsers(dest="action", required=True)
-        oa = osub.add_parser("add")
-        oa.add_argument("name")
-        oa.add_argument("-o", "--options", required=True)
-        oa.add_argument("--force", action="store_true")
-        oa.set_defaults(func=lambda a, k=kind, d=cli + "s", f=field: cmd_simple_add(k, d, f, a))
-        osh = osub.add_parser("show")
-        osh.add_argument("name", nargs="?")
-        osh.set_defaults(func=lambda a, k=kind, f=field: cmd_simple_show(k, f, a.name))
-
-    cfg = sub.add_parser("config")
-    csub = cfg.add_subparsers(dest="action", required=True)
-    chk = csub.add_parser("check")
-    chk.set_defaults(func=lambda a: sys.exit(0 if run_check() else 1))
-    rel = csub.add_parser("reload")
-    rel.set_defaults(func=lambda a: reload_service())
-
-    comp = sub.add_parser("__complete", help=argparse.SUPPRESS)
-    comp.add_argument("words", nargs="*")
-    comp.set_defaults(func=lambda a: complete(a.words))
-    return p
+    config = sub.add_parser("config", help="Validate or reload Nagios")
+    config_sub = config.add_subparsers(dest="action", required=True)
+    p = config_sub.add_parser("check", help="Validate Nagios configuration")
+    p.set_defaults(func=cmd_config_check)
+    p = config_sub.add_parser("reload", help="Validate and reload Nagios")
+    p.set_defaults(func=cmd_config_reload)
+    return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main() -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
-    args.func(args)
-    return 0
+    args = parser.parse_args()
+    try:
+        return args.func(args)
+    except NagiosCmdError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except PermissionError as exc:
+        print(f"permission denied: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":
