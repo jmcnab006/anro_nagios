@@ -23,6 +23,7 @@
       - python3-passlib
       - wget
       - unzip
+      - bash-completion
     state: present
 
 - name: INSTALL | Install perl apt packages

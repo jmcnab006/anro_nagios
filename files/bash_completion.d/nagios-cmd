@@ -1,0 +1,9 @@
+# bash completion for nagios-cmd
+_nagios_cmd_complete() {
+    local cur words suggestions
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    words=("${COMP_WORDS[@]:0:$((COMP_CWORD + 1))}")
+    suggestions=$(nagios-cmd __complete "${words[@]}" 2>/dev/null)
+    COMPREPLY=( $(compgen -W "${suggestions}" -- "${cur}") )
+}
+complete -F _nagios_cmd_complete nagios-cmd

@@ -1,0 +1,47 @@
+---
+- name: NAGIOS-CMD | Install nagios-cmd helper
+  ansible.builtin.copy:
+    src: nagios-cmd
+    dest: /usr/local/bin/nagios-cmd
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: NAGIOS-CMD | Create bash completion directory
+  ansible.builtin.file:
+    path: /etc/bash_completion.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: NAGIOS-CMD | Install nagios-cmd bash completion
+  ansible.builtin.copy:
+    src: bash_completion.d/nagios-cmd
+    dest: /etc/bash_completion.d/nagios-cmd
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: NAGIOS-CMD | Ensure custom Nagios object directories exist
+  ansible.builtin.file:
+    path: "{{ anro_nagios_config_path }}/objects/{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ anro_nagios_group | default('nagios') }}"
+    mode: '0775'
+  loop:
+    - commands
+    - contacts
+    - hosts
+    - hosts/default
+    - templates
+    - timeperiods
+
+- name: NAGIOS-CMD | Ensure Nagios service definition directory exists
+  ansible.builtin.file:
+    path: "{{ anro_nagios_config_path }}/servicedefs"
+    state: directory
+    owner: root
+    group: nagios
+    mode: '0775'
