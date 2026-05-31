@@ -23,8 +23,15 @@
       - python3-passlib
       - wget
       - unzip
-      - bash-completion
     state: present
+
+- name: Ensure the service is started and enabled
+  ansible.builtin.service:
+    name: "{{ anro_nagios_service }}"
+    enabled: "{{ anro_nagios_service_enabled }}"
+    state: "{{ anro_nagios_service_state }}"
+  notify:
+    - "Test anro_nagios nagios"
 
 - name: INSTALL | Install perl apt packages
   ansible.builtin.apt:

@@ -1,34 +1,244 @@
 ---
 argument_specs:
   main:
-    short_description: "Install nagios4-core and configure a baseline for usage"
-    description: >
-      Installs nagios4-core from apt repository and customizes
-    author: Jeremy McNab
-    options:
-      anro_nagios_install:
-        type: "bool"
-        default: true
-        description: "Install nagios4 package"
-      anro_nagios_user:
-        type: "str"
-        default: "nagios"
-        description: "User to run the nagios user as"
-      anro_nagios_group:
-        type: "str"
-        default: "nagios"
-        description: "Group to run the nagios user as part of"
-      anro_nagios_users:
-        type: "list"
-        default: []
-        elements: 'dict'
-        description: "List of users to add to nagios"
-        options:
-          name:
-            type: 'str'
-            description: "User name"
-          password:
-            type: 'str'
-            description: "User password"
-      anro_nagios_cgi_config:
-        type: "dict"
+  short_description: Install and configure Nagios Core
+  description:
+  - Install Nagios Core from Ubuntu repositories.
+  - Configure Nagios directories and default objects.
+  - Install nagios-cmd management utility.
+  - Create custom object hierarchy for administrator-managed configuration.
+  author:
+    - Jeremy McNab
+  options:
+    anro_nagios_enabled:
+      type: bool
+      default: true
+      description:
+        - Enable or disable role execution.
+
+    anro_nagios_install:
+      type: bool
+      default: true
+      description:
+        - Enable or disable nagios installation.
+
+    anro_nagios_configure:
+      type: bool
+      default: true
+      description:
+        - Enable or disable nagios customization.
+
+    anro_nagios_install_helper:
+      type: bool
+      default: true
+      description:
+        - Enable or disable nagios customization.
+
+    anro_nagios_package_state:
+      type: str
+      default: present
+      choices:
+        - present
+        - latest
+      description:
+        - Desired package state.
+
+    anro_nagios_service_name:
+      type: str
+      default: nagios4.service
+      description:
+        - Nagios systemd service name.
+
+    anro_nagios_service_enabled:
+      type: bool
+      default: true
+      description:
+        - Enable Nagios service at boot.
+
+    anro_nagios_service_state:
+      type: str
+      default: started
+      choices:
+        - started
+        - stopped
+      description:
+        - Desired Nagios service state.
+
+    anro_nagios_user:
+      type: str
+      default: nagios
+      description:
+        - Nagios service account.
+
+    anro_nagios_config_path:
+      type: str
+      default: /etc/nagios4
+      description:
+        - Primary Nagios configuration directory.
+
+    anro_nagios_config_file:
+      type: str
+      default: /etc/nagios4/nagios.cfg
+      description:
+        - Main Nagios configuration file.
+
+    anro_nagios_binary:
+      type: str
+      default: /usr/sbin/nagios4
+      description:
+        - Nagios binary used for validation.
+
+    anro_nagios_symlink_etc_nagios:
+      type: bool
+      default: true
+      description:
+        - Create /etc/nagios compatibility symlink.
+
+    anro_nagios_objects_dir:
+      type: str
+      default: /etc/nagios4/objects
+      description:
+        - Nagios object directory.
+
+    anro_nagios_custom_dirs:
+      type: list
+      elements: str
+      default:
+        - commands
+        - contacts
+        - contactgroups
+        - servicegroups
+        - templates
+        - timeperiods
+        - hosts
+      description:
+        - Custom object directories created beneath objects.
+
+    anro_nagios_default_hostgroup:
+      type: str
+      default: default
+      description:
+        - Default hostgroup used by nagios-cmd.
+
+    anro_nagios_servicedefs_dir:
+      type: str
+      default: /etc/nagios4/servicedefs
+      description:
+        - Directory containing reusable service templates.
+
+    anro_nagios_backup_dir:
+      type: str
+      default: /etc/nagios4/backup
+      description:
+        - Default backup directory used by nagios-cmd.
+
+    anro_nagios_nagios_cmd_enabled:
+      type: bool
+      default: true
+      description:
+        - Install nagios-cmd utility.
+
+    anro_nagios_nagios_cmd_path:
+      type: str
+      default: /usr/local/bin/nagios-cmd
+      description:
+        - Installation path for nagios-cmd.
+
+    anro_nagios_validate_config:
+      type: bool
+      default: true
+      description:
+        - Validate configuration before reloads.
+
+    anro_nagios_reload_on_change:
+      type: bool
+      default: true
+      description:
+        - Reload Nagios when configuration changes.
+
+    anro_nagios_web_enabled:
+      type: bool
+      default: true
+      description:
+        - Configure Apache integration.
+
+    anro_nagios_htpasswd_users:
+      type: dict
+      default: {}
+      description:
+        - Dictionary of Nagios web users and passwords.
+
+    anro_nagios_default_commands:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default command objects managed by Ansible.
+
+    anro_nagios_default_contacts:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default contact objects managed by Ansible.
+
+    anro_nagios_default_contactgroups:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default contactgroup objects managed by Ansible.
+
+    anro_nagios_default_servicegroups:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default servicegroup objects managed by Ansible.
+
+    anro_nagios_default_templates:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default host/service/contact templates managed by Ansible.
+
+    anro_nagios_default_timeperiods:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Default timeperiod objects managed by Ansible.
+
+    anro_nagios_default_servicedefs:
+      type: list
+      elements: dict
+      default: []
+      description:
+        - Service definition templates installed into servicedefs.
+
+    anro_nagios_cfg_dirs:
+      type: list
+      elements: str
+      default:
+        - /etc/nagios4/objects/commands
+        - /etc/nagios4/objects/contacts
+        - /etc/nagios4/objects/contactgroups
+        - /etc/nagios4/objects/servicegroups
+        - /etc/nagios4/objects/templates
+        - /etc/nagios4/objects/timeperiods
+        - /etc/nagios4/objects/hosts
+      description:
+        - cfg_dir entries added to nagios.cfg.
+
+    anro_nagios_directory_mode:
+      type: str
+      default: "0755"
+      description:
+        - Mode applied to configuration directories.
+
+    anro_nagios_file_mode:
+      type: str
+      default: "0644"
+      description:
+        - Mode applied to configuration files.

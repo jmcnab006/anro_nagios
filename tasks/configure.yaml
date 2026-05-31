@@ -199,3 +199,5 @@
         owner: root
         group: nagios
         mode: '0755'
+      when:
+        - anro_nagios_install_helper | bool

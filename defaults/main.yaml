@@ -1,16 +1,10 @@
-# Do or do not install nagios4 service
-# this may be true in some cases in almost
-# all cases this should be enabled
+anro_nagios_enabled: true
 anro_nagios_install: true
-
-# Do or do not configure nagios4 service
-# if no changes to the install of nagios4
-# service are wanted
 anro_nagios_configure: true
+anro_nagios_install_helper: true
 
-# Do or do not install nagios-cmd executable for configuration management
-# if this part of the role is left out then management of the config is manual
-anro_nagios_install_cmd: true
+
+anro_nagios_package_state: present
 
 # Set our domain for configuring the webserver and postfix
 anro_nagios_domain: "example.com"
@@ -18,6 +12,8 @@ anro_nagios_domain: "example.com"
 # Set our nagios service name default: nagios4.service
 # there should very few reasons to change this
 anro_nagios_service: 'nagios4.service'
+anro_nagios_service_enabled: true
+anro_nagios_service_state: started
 
 # Set our default overwrite value
 anro_nagios_force: false

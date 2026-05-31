@@ -60,10 +60,6 @@
   when:
     - anro_nagios_configure | bool
 
-- name: Configure nagios-cmd
-  ansible.builtin.import_tasks: nagios-cmd.yaml
-  when:
-    - anro_nagios_install_cmd | bool
 
 # - name: Build nagios core from source
 #  ansible.builtin.import_tasks: build-nagios.yaml
