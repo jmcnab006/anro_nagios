@@ -123,22 +123,17 @@
       with_items:
         - commands
         - contacts
-        - hosts
+        - hosts/default
         - templates
         - timeperiods
-        - hosts/default
 
-    - name: CONFIGURE | Remove default config files config
+    - name: CONFIGURE | Remove select default config files config
       ansible.builtin.file:
         path: "{{ anro_nagios_objects_path }}/{{ item }}"
         state: absent
       loop:
-#        - commands.cfg
-#        - contacts.cfg
         - printer.cfg
         - switch.cfg
-#        - templates.cfg
-#        - timeperiods.cfg
         - windows.cfg
 
     - name: CONFIGURE | Add nagios service definitions directory
@@ -156,8 +151,6 @@
         owner: "{{ anro_nagios_config_full.nagios_user }}"
         group: "{{ anro_nagios_config_full.nagios_group }}"
         mode: "0774"
-#      with_items: "{{ anro_nagios_commands_full }}"
-#      when: anro_nagios_commands_full | length > 0
 
     - name: CONFIGURE | Add default contacts
       ansible.builtin.template:
@@ -166,19 +159,7 @@
         owner: "{{ anro_nagios_config_full.nagios_user }}"
         group: "{{ anro_nagios_config_full.nagios_group }}"
         mode: "0774"
-     # loop: "{{ anro_nagios_contacts_full }}"
-     # when: anro_nagios_contacts_full | length > 0
 
-#  - name: CONFIGURE | Add default contactgroups
-#    ansible.builtin.template:
-#      src: etc/nagios/objects/nagios-contactgroups.cfg.j2
-#      dest: "{{ anro_nagios_objects_path }}/contactgroups.cfg"
-#      owner: "{{ anro_nagios_config_full.nagios_user }}"
-#      group: "{{ anro_nagios_config_full.nagios_group }}"
-#      mode: "0774"
-#    loop: "{{ anro_nagios_contactgroups_full }}"
-#    when: anro_nagios_contactgroups_full | length > 0
-#
     - name: CONFIGURE | Add default templates
       ansible.builtin.template:
         src: etc/nagios/objects/templates.cfg.j2
@@ -186,38 +167,6 @@
         owner: "{{ anro_nagios_config_full.nagios_user }}"
         group: "{{ anro_nagios_config_full.nagios_group }}"
         mode: "0774"
-#      loop: "{{ anro_nagios_host_templates_full }}"
-#      when: anro_nagios_host_templates_full | length > 0
-
-#    - name: CONFIGURE | Add default service templates
-#      ansible.builtin.template:
-#        src: etc/nagios/objects/nagios-services.cfg.j2
-#        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
-#        owner: "{{ anro_nagios_config_full.nagios_user }}"
-#        group: "{{ anro_nagios_config_full.nagios_group }}"
-#        mode: "0774"
-#      loop: "{{ anro_nagios_service_templates_full }}"
-#      when: anro_nagios_service_templates_full | length > 0
-
-#    - name: CONFIGURE | Add default contact templates
-#      ansible.builtin.template:
-#        src: etc/nagios/objects/nagios-contacts.cfg.j2
-#        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
-#        owner: "{{ anro_nagios_config_full.nagios_user }}"
-#        group: "{{ anro_nagios_config_full.nagios_group }}"
-#        mode: "0774"
-#      loop: "{{ anro_nagios_contact_templates_full }}"
-#      when: anro_nagios_contact_templates_full | length > 0
-
-#    - name: CONFIGURE | Add default contactgroup templates
-#      ansible.builtin.template:
-#        src: etc/nagios/objects/nagios-contactgroups.cfg.j2
-#        dest: "{{ anro_nagios_objects_path }}/templates/{{ item.name }}.template.cfg"
-#        owner: "{{ anro_nagios_config_full.nagios_user }}"
-#        group: "{{ anro_nagios_config_full.nagios_group }}"
-#        mode: "0774"
-#      loop: "{{ anro_nagios_contactgroup_templates_full }}"
-#      when: anro_nagios_contactgroup_templates_full | length > 0
 
     - name: CONFIGURE | Add default timeperiod templates
       ansible.builtin.template:
@@ -226,8 +175,6 @@
         owner: "{{ anro_nagios_config_full.nagios_user }}"
         group: "{{ anro_nagios_config_full.nagios_group }}"
         mode: "0774"
-#      loop: "{{ anro_nagios_timeperiod_templates_full }}"
-#      when: anro_nagios_timeperiod_templates_full | length > 0
 
     - name: CONFIGURE | Add localhost with hostname entry
       ansible.builtin.template:
@@ -236,3 +183,11 @@
         owner: "{{ anro_nagios_config_full.nagios_user }}"
         group: "{{ anro_nagios_config_full.nagios_group }}"
         mode: "0774"
+
+    - name: CONFIGURE | Install nagios-cmd helper
+      ansible.builtin.copy:
+        src: nagios-cmd
+        dest: /usr/local/bin/nagios-cmd
+        owner: root
+        group: nagios
+        mode: '0755'
