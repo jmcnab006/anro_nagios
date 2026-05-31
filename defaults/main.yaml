@@ -1,38 +1,80 @@
+# Do or do not install nagios4 service
+# this may be true in some cases in almost
+# all cases this should be enabled
 anro_nagios_install: true
+
+# Do or do not configure nagios4 service
+# if no changes to the install of nagios4
+# service are wanted
+anro_nagios_configure: true
+
+# Do or do not install nagios-cmd executable for configuration management
+# if this part of the role is left out then management of the config is manual
+anro_nagios_install_cmd: true
+
+# Set our domain for configuring the webserver and postfix
 anro_nagios_domain: "example.com"
+
+# Set our nagios service name default: nagios4.service
+# there should very few reasons to change this
 anro_nagios_service: 'nagios4.service'
 
+# Set our default overwrite value
 anro_nagios_force: false
 
+# What users to add to the htpasswd file for authentication name: password:
 anro_nagios_users: []
 
+# most of these should not be changed
 anro_nagios_config_path: '/etc/nagios4'
 anro_nagios_objects_path: "{{ anro_nagios_config_path }}/objects"
 anro_nagios_binary: '/usr/sbin/nagios4'
 anro_nagios_config_file: "{{ anro_nagios_config_path }}/nagios.cfg"
-
 anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
+
+# define a list here if we want addition packages installed on the system
 anro_nagios_add_packages: []
+
+# define a list here if we want certain packages explicitly removed from the system
 anro_nagios_remove_packages: []
 
+# default auth realm as defined in apache configuration
 anro_nagios_auth_realm: "monitoring"
+
+# Apache htpassword users location
 anro_nagios_htpasswd_file: /etc/nagios4/htpassword.users
 
+# define our certificate paths.
 anro_nagios_certificate_key_file: /etc/ssl/private/ssl-cert-snakeoil.key
 anro_nagios_certificate_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
 anro_nagios_certificate_chain_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+
+# define our apache2 basic auth provider which should by default be file
 anro_nagios_basic_auth_provider:
   - file
+
+# to use or not to use ldap configuration
 anro_nagios_use_ldap: false
 anro_nagios_ldap_provider: "nagios-ldap"
+
+# cert path for ldap authentication certificate
+
 anro_nagios_certificate_auth_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+# basic ldap authentication parameters
 anro_nagios_auth_ldap_bind_dn: ""
 anro_nagios_auth_ldap_bind_pw: ""
 anro_nagios_auth_ldap_url: ""
 
+# settings to override in the default cgi.cfg
 anro_nagios_cgi_config: {}
+
+# settings to override in the nagios.cfg
 anro_nagios_config: {}
+
+# settings to override in the resource.cfg
 anro_nagios_resource_config: {}
+
+# custom definitions that should be added to the defaults
 anro_nagios_commands: []
 anro_nagios_contacts: []
 anro_nagios_contactgroups: []
