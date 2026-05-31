@@ -31,6 +31,7 @@ anro_nagios_objects_path: "{{ anro_nagios_config_path }}/objects"
 anro_nagios_binary: '/usr/sbin/nagios4'
 anro_nagios_config_file: "{{ anro_nagios_config_path }}/nagios.cfg"
 anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
+anro_nagios_config_backup_path: "{{ anro_nagios_config_path }}/backup"
 
 # define a list here if we want addition packages installed on the system
 anro_nagios_add_packages: []

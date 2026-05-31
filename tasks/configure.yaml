@@ -127,6 +127,14 @@
         - templates
         - timeperiods
 
+    - name: CONFIGURE | Verify backup directory
+      ansible.builtin.file:
+        path: "{{ anro_nagios_config_backup_path }}"
+        state: directory
+        owner: "{{ anro_nagios_config_full.nagios_user }}"
+        group: "{{ anro_nagios_config_full.nagios_group }}"
+        mode: "0774"
+
     - name: CONFIGURE | Remove select default config files config
       ansible.builtin.file:
         path: "{{ anro_nagios_objects_path }}/{{ item }}"
