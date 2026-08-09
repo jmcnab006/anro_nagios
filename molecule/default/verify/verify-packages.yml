@@ -1,0 +1,32 @@
+- name: VERIFY PACKAGE | Verify expected packages are installed
+  ansible.builtin.assert:
+    that: "item in ansible_facts.packages"
+    fail_msg: "Expected package {{ item }} is not installed"
+  loop: >-
+    {{ (usi_server_default_packages
+        + (['qemu-guest-agent']
+           if (ansible_facts['system_vendor'] == 'QEMU'
+               and ansible_facts['virtualization_role'] == 'guest')
+           else [])
+        + usi_server_add_packages) | flatten | unique }}
+
+- name: VERIFY PACKAGE | Verify unnecessary packages are not installed
+  ansible.builtin.assert:
+    that: "item not in ansible_facts.packages"
+    fail_msg: "Unnecessary package {{ item }} is installed"
+  loop: >-
+    {{ (usi_server_remove_packages
+        + usi_server_unnecessary_packages) | flatten | unique }}
+
+- name: VERIFY PACKAGE | Ensure installs were not exclusive
+  ansible.builtin.assert:
+    that: "ansible_facts.packages.keys() | difference(usi_server_default_packages
+        + (['qemu-guest-agent']
+           if (ansible_facts['system_vendor'] == 'QEMU'
+               and ansible_facts['virtualization_role'] == 'guest')
+           else [])
+        + usi_server_add_packages) | flatten | unique | length > 0"
+
+- name: VERIFY PACKAGE | Temp display packages for debugging
+  ansible.builtin.debug:
+    msg: "Packages installed: {{ ansible_facts.packages.keys() | sort }}"

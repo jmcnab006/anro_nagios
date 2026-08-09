@@ -1,5 +1,8 @@
 ---
-- name: Prepare
-  hosts: all
+- name: Prepare Rocky 8
+  hosts: rocky-8
   gather_facts: false
-  tasks: []
+  tasks:
+    - name: Install python3.11
+      ansible.builtin.raw: dnf install -y python3.11
+      changed_when: false

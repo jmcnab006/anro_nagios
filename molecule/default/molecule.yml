@@ -1,49 +1,29 @@
 ---
-role_name_check: 1
+ansible:
+  cfg:
+    defaults:
+      deprecation_warnings: false
+      callbacks_enabled: profile_tasks
+      pipelining: true
+      roles_path: /home/jmcnab/git
+
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/inventory/
 
 dependency:
   name: galaxy
+  options:
+    requirements-file: ${MOLECULE_SCENARIO_DIRECTORY}/requirements.yml
 
-driver:
-  name: docker
-
-platforms:
-  - name: anro-nagios-ubuntu2404
-    image: geerlingguy/docker-ubuntu2404-ansible:latest
-    pre_build_image: true
-    privileged: true
-    command: /lib/systemd/systemd
-    cgroupns_mode: host
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    exposed_ports:
-      - 443
-    published_ports:
-      - 8081:443
-
-  - name: anro-nagios-ubuntu2204
-    image: geerlingguy/docker-ubuntu2204-ansible:latest
-    pre_build_image: true
-    privileged: true
-    command: /lib/systemd/systemd
-    cgroupns_mode: host
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    exposed_ports:
-      - 443
-    published_ports:
-      - 8082:443
-
-provisioner:
-  name: ansible
-  config_options:
-    defaults:
-      roles_path: /home/jmcnab/git/
-
-verifier:
-  name: ansible
-
-lint: |
-  set -e
-  yamllint .
-  ansible-lint .
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

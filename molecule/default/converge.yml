@@ -1,12 +1,6 @@
 ---
 - name: Converge
-  hosts: all
-  become: true
-  vars:
-    anro_nagios_domain: vacuus.biz
-    anro_nagios_users:
-      - name: jmcnab
-        password: 'changeme'
+  hosts: server
+
   roles:
     - role: anro_nagios
-

@@ -1,0 +1,154 @@
+- name: VERIFY USERS | Gather passwd database
+  ansible.builtin.getent:
+    database: passwd
+
+- name: VERIFY USERS | Assert present users exist with correct shell and home
+  when: item.state | default('present') == 'present'
+  ansible.builtin.assert:
+    that:
+      - getent_passwd[item.name] is defined
+      - getent_passwd[item.name][5] == (item.shell | default('/bin/bash'))
+      - getent_passwd[item.name][4] == (item.home | default('/home/' + item.name))
+    fail_msg: >-
+      User {{ item.name }} is missing or has incorrect attributes.
+      Expected shell={{ item.shell | default('/bin/bash') }},
+      home={{ item.home | default('/home/' + item.name) }}.
+  loop: "{{ usi_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Assert absent users do not exist
+  when: item.state | default('present') == 'absent'
+  ansible.builtin.assert:
+    that:
+      - getent_passwd[item.name] is not defined
+    fail_msg: "User {{ item.name }} should be absent but was found in passwd."
+  loop: "{{ usi_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Stat home directories for present users
+  when: item.state | default('present') == 'present'
+  ansible.builtin.stat:
+    path: "{{ item.home | default('/home/' + item.name) }}"
+  register: _user_home_stat
+  loop: "{{ usi_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Assert home directories exist when create_home is true
+  when:
+    - not (item.skipped | default(false))
+    - item.item.create_home | default(true) | bool
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+    fail_msg: >-
+      Home directory {{ item.item.home | default('/home/' + item.item.name) }}
+      for user {{ item.item.name }} does not exist or is not a directory.
+  loop: "{{ _user_home_stat.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: VERIFY USERS | Retrieve group memberships for present users
+  when: item.state | default('present') == 'present'
+  ansible.builtin.command:
+    cmd: "id -nG {{ item.name }}"
+  register: _user_groups
+  changed_when: false
+  loop: "{{ usi_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Assert users belong to expected groups ignoring extra groups
+  when:
+    - not (item.skipped | default(false))
+    - item.item.groups | default([]) | length > 0
+    - item.item.append | default(true) | bool
+  ansible.builtin.assert:
+    that:
+      - (item.item.groups | default([])) | difference(item.stdout.split()) | length == 0
+    fail_msg: >-
+      User {{ item.item.name }} is missing expected groups.
+      Expected: {{ item.item.groups | default([]) }},
+      actual: {{ item.stdout.split() }}
+  loop: "{{ _user_groups.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: VERIFY USERS | Assert users belong to exact groups
+  when:
+    - not (item.skipped | default(false))
+    - item.item.groups | default([]) | length > 0
+    - not (item.item.append | default(true) | bool)
+  ansible.builtin.assert:
+    that:
+      - (item.item.groups | default([])) | symmetric_difference(item.stdout.split()) | length == 0
+    fail_msg: >-
+      User {{ item.item.name }} has unexpected group membership.
+      Expected exactly: {{ item.item.groups | default([]) }},
+      actual: {{ item.stdout.split() }}
+  loop: "{{ _user_groups.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: VERIFY USERS | Stat sudoers rule files
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/sudoers.d/50-{{ item.name }}"
+  register: _sudoers_stat
+  loop: "{{ usi_server_sudoers }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Assert sudoers rule files exist with correct permissions
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.mode == '0440'
+      - item.stat.pw_name == 'root'
+      - item.stat.gr_name == 'root'
+    fail_msg: >-
+      Sudoers file for {{ item.item.name }} is missing or has incorrect
+      permissions/ownership (expected mode=0440, root:root).
+  loop: "{{ _sudoers_stat.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: VERIFY USERS | Validate sudoers rule syntax with visudo
+  become: true
+  ansible.builtin.command:
+    cmd: "/usr/sbin/visudo -cf /etc/sudoers.d/50-{{ item.name }}"
+  changed_when: false
+  loop: "{{ usi_server_sudoers }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Slurp sudoers rule files
+  become: true
+  ansible.builtin.slurp:
+    src: "/etc/sudoers.d/50-{{ item.name }}"
+  register: _sudoers_content
+  loop: "{{ usi_server_sudoers }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: VERIFY USERS | Assert sudoers rule content matches expected
+  ansible.builtin.assert:
+    that:
+      - >-
+        (item.item.subjects | join(',') ~ ' ' ~
+        (item.item.hosts | default(['ALL'])) | join(',') ~ '=(' ~
+        (item.item.runas_users | default(['ALL'])) | join(',') ~
+        (':' ~ (item.item.runas_groups | join(',')) if (item.item.runas_groups is defined and item.item.runas_groups | length > 0) else '') ~
+        ') ' ~
+        ('NOPASSWD: ' if (item.item.nopasswd | default(false)) else '') ~
+        (item.item.commands | default(['ALL'])) | join(','))
+        in (item.content | b64decode)
+    fail_msg: >-
+      Expected sudoers rule not found in /etc/sudoers.d/50-{{ item.item.name }}.
+      File contents: {{ item.content | b64decode }}
+  loop: "{{ _sudoers_content.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
