@@ -22,7 +22,7 @@ argument_specs:
       description:
         - Enable or disable nagios installation.
 
-    anro_nagios_configure:
+    anro_nagios_cfgure:
       type: bool
       default: true
       description:
@@ -70,13 +70,13 @@ argument_specs:
       description:
         - Nagios service account.
 
-    anro_nagios_config_path:
+    anro_nagios_cfg_path:
       type: str
       default: /etc/nagios4
       description:
         - Primary Nagios configuration directory.
 
-    anro_nagios_config_file:
+    anro_nagios_cfg_file:
       type: str
       default: /etc/nagios4/nagios.cfg
       description:

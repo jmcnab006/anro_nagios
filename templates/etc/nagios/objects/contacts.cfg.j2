@@ -1,8 +1,8 @@
 {{ ansible_managed | comment }}
 
-{% if anro_nagios_contacts_full is defined and
-      anro_nagios_contacts_full | length > 0 %}
-{% for contact in anro_nagios_contacts_full %}
+{% if _anro_nagios_contacts is defined and
+      _anro_nagios_contacts | length > 0 %}
+{% for contact in _anro_nagios_contacts %}
 define contact {
 {% for key, value in contact.items() %}
     {{ "%-30s"|format(key) }} {{ value }}
@@ -12,9 +12,9 @@ define contact {
 
 {% endif %}
 
-{% if anro_nagios_contactgroups_full is defined and
-      anro_nagios_contactgroups_full | length > 0 %}
-{% for contactgroup in anro_nagios_contactgroups_full %}
+{% if _anro_nagios_contactgroups is defined and
+      _anro_nagios_contactgroups | length > 0 %}
+{% for contactgroup in _anro_nagios_contactgroups %}
 define contactgroup {
 {% for key, value in contactgroup.items() %}
     {{ "%-30s"|format(key) }} {{ value }}

@@ -22,7 +22,7 @@
   delay: 2
 
 - name: Test anro_nagios nagios
-  ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_config_file }}"
+  ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_cfg_file }}"
   register: _anro_nagios_nagios_test
   failed_when:
     - '"Total Errors:   0" not in _anro_nagios_nagios_test.stderr'

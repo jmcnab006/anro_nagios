@@ -1,6 +1,6 @@
 {{ ansible_managed | comment }}
 
-{% for key, value in anro_nagios_config_full.items() %}
+{% for key, value in _anro_nagios_cfg.items() %}
 {% if key == "cfg_dir" %}
 {% for line in value %}
 {{ key }}={{ line }}

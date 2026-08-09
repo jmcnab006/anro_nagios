@@ -1,6 +1,6 @@
 anro_nagios_enabled: true
 anro_nagios_install: true
-anro_nagios_configure: true
+anro_nagios_cfgure: true
 anro_nagios_install_helper: true
 
 
@@ -22,12 +22,12 @@ anro_nagios_force: false
 anro_nagios_users: []
 
 # most of these should not be changed
-anro_nagios_config_path: '/etc/nagios4'
-anro_nagios_objects_path: "{{ anro_nagios_config_path }}/objects"
+anro_nagios_cfg_path: '/etc/nagios4'
+anro_nagios_objects_path: "{{ anro_nagios_cfg_path }}/objects"
 anro_nagios_binary: '/usr/sbin/nagios4'
-anro_nagios_config_file: "{{ anro_nagios_config_path }}/nagios.cfg"
+anro_nagios_cfg_file: "{{ anro_nagios_cfg_path }}/nagios.cfg"
 anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
-anro_nagios_config_backup_path: "{{ anro_nagios_config_path }}/backup"
+anro_nagios_cfg_backup_path: "{{ anro_nagios_cfg_path }}/backup"
 
 # define a list here if we want addition packages installed on the system
 anro_nagios_add_packages: []
@@ -63,13 +63,13 @@ anro_nagios_auth_ldap_bind_pw: ""
 anro_nagios_auth_ldap_url: ""
 
 # settings to override in the default cgi.cfg
-anro_nagios_cgi_config: {}
+anro_nagios_cgi_cfg: {}
 
 # settings to override in the nagios.cfg
-anro_nagios_config: {}
+anro_nagios_cfg: {}
 
 # settings to override in the resource.cfg
-anro_nagios_resource_config: {}
+anro_nagios_resource_cfg: {}
 
 # custom definitions that should be added to the defaults
 anro_nagios_commands: []

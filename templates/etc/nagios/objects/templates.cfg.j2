@@ -1,9 +1,9 @@
 {{ ansible_managed | comment }}
 
 {# Host Template Definitions #}
-{% if anro_nagios_host_templates_full is defined and
-      anro_nagios_host_templates_full | length > 0 %}
-{% for host in anro_nagios_host_templates_full %}
+{% if _anro_nagios_templates_host is defined and
+      _anro_nagios_templates_host | length > 0 %}
+{% for host in _anro_nagios_templates_host %}
 # HOST TEMPLATES
 define host {
 
@@ -18,9 +18,9 @@ define host {
 {% endif %}
 
 {# Service Template Definitions #}
-{% if anro_nagios_service_templates_full is defined and
-      anro_nagios_service_templates_full | length > 0 %}
-{% for service in anro_nagios_service_templates_full %}
+{% if _anro_nagios_templates_service is defined and
+      _anro_nagios_templates_service | length > 0 %}
+{% for service in _anro_nagios_templates_service %}
 # SERVICE TEMPLATES
 define service {
 
@@ -35,10 +35,10 @@ define service {
 {% endif %}
 
 {# Contact Template Definitions #}
-{% if anro_nagios_contact_templates_full is defined and
-      anro_nagios_contact_templates_full | length > 0 %}
-{% for contact in anro_nagios_contact_templates_full %}
-# SERVICE TEMPLATES
+{% if _anro_nagios_templates_contact is defined and
+      _anro_nagios_templates_contact | length > 0 %}
+{% for contact in _anro_nagios_templates_contact %}
+# CONTACT TEMPLATES
 define contact {
 
 {% for key, value in contact.items() %}
@@ -51,11 +51,11 @@ define contact {
 
 {% endif %}
 
-{# Contact Template Definitions #}
-{% if anro_nagios_contactgroup_templates_full is defined and
-      anro_nagios_contactgroup_templates_full | length > 0 %}
-{% for contactgroup in anro_nagios_contactgroup_templates_full %}
-# SERVICE TEMPLATES
+{# Contact Group Template Definitions #}
+{% if _anro_nagios_templates_contactgroup is defined and
+      _anro_nagios_templates_contactgroup | length > 0 %}
+{% for contactgroup in _anro_nagios_templates_contactgroup %}
+# CONTACTGROUP TEMPLATES
 define contact {
 
 {% for key, value in contactgroup.items() %}

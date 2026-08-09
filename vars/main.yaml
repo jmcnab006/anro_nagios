@@ -1,6 +1,6 @@
 # These are the var defaults for core items. these are combined with other dicts or lists to create 'full' configs
-anro_nagios_cgi_defaults:
-  main_config_file: "{{ anro_nagios_config_file }}"
+_anro_nagios_cgi_defaults:
+  main_config_file: "{{ anro_nagios_cfg_file }}"
   physical_html_path: '/usr/share/nagios4/htdocs'
   url_html_path: '/nagios'
   show_context_help: 0
@@ -27,7 +27,10 @@ anro_nagios_cgi_defaults:
   navbar_search_for_aliases: 1
   ack_no_sticky: 1
 
-anro_nagios_config_defaults:
+# Silently merge the nagios_cgi_config
+_anro_nagios_cgi_cfg: "{{ _anro_nagios_cgi_defaults | combine(anro_nagios_cgi_cfg) }}"
+
+_anro_nagios_cfg_defaults:
   log_file: /var/log/nagios4/nagios.log
   cfg_dir:
     - /etc/nagios-plugins/config
@@ -137,12 +140,18 @@ anro_nagios_config_defaults:
   max_debug_file_size: 1000000
   allow_empty_hostgroup_assignment: 0
 
-anro_nagios_resource_defaults:
+# Silently merge
+_anro_nagios_cfg: "{{ _anro_nagios_cfg_defaults | combine(anro_nagios_cfg) }}"
+
+_anro_nagios_resource_defaults:
   $USER1$: /usr/lib/nagios/plugins
   $USER2$: /usr/lib/nagios/plugins/eventhandlers
 
+# Silently merge
+_anro_nagios_resource_cfg: "{{ _anro_nagios_resource_defaults | combine(anro_nagios_resource_cfg) }}"
 
-anro_nagios_commands_defaults:
+# Default nagios command definitions
+_anro_nagios_commands_defaults:
   - command_name: notify-host-by-email
     command_line: >
       /usr/bin/printf "%b" "***** Nagios *****\n\n
@@ -229,7 +238,10 @@ anro_nagios_commands_defaults:
       /usr/bin/printf "%b" "$LASTSERVICECHECK$\t$HOSTNAME$\t$SERVICEDESC$\t$SERVICESTATE$\t$SERVICEATTEMPT$\t$SERVICESTATETYPE$\t$SERVICEEXECUTIONTIME$\t$SERVICELATENCY$\t$SERVICEOUTPUT$\t$SERVICEPERFDATA$\n" >> /var/lib/nagios4/service-perfdata.out
   # yamllint enable rule:line-length
 
-anro_nagios_contacts_defaults:
+# Silently combine
+_anro_nagios_commands: "{{ _anro_nagios_commands_defaults + anro_nagios_commands }}"
+
+_anro_nagios_contacts_defaults:
   - contact_name: 'nagiosadmin'
     use: 'generic-contact'
     alias: 'Nagios Admin'
@@ -239,12 +251,18 @@ anro_nagios_contacts_defaults:
     use: 'generic-contact'
     alias: 'noemail'
 
-anro_nagios_contactgroups_defaults:
+# Silently combine
+_anro_nagios_contacts: "{{ _anro_nagios_contacts_defaults + anro_nagios_contacts }}"
+
+_anro_nagios_contactgroups_defaults:
   - contactgroup_name: 'admins'
     alias: 'Nagios Admin'
     members: 'nagiosadmin'
 
-anro_nagios_host_templates_defaults:
+# Silently combine
+_anro_nagios_contactgroups: "{{ _anro_nagios_contactgroups_defaults + anro_nagios_contactgroups }}"
+
+anro_nagios_templates_host_defaults:
   - name: 'generic-host'
     check_command: 'check-host-alive!!!!!!!!'
     notifications_enabled: 1
@@ -276,7 +294,11 @@ anro_nagios_host_templates_defaults:
     contacts: 'noemail'
     register: 0
 
-anro_nagios_contact_templates_defaults:
+# Silently combine
+_anro_nagios_templates_host: "{{ _anro_nagios_templates_host_defaults + anro_nagios_templates_host }}"
+
+
+_anro_nagios_templates_contact_defaults:
   - name: 'generic-contact'
     service_notification_period: '24x7'
     host_notification_period: '24x7'
@@ -286,9 +308,17 @@ anro_nagios_contact_templates_defaults:
     host_notification_commands: 'notify-host-by-email'
     register: 0
 
-anro_nagios_contactgroup_templates_defaults: []
+# Silently combine
+_anro_nagios_templates_contact: "{{ _anro_nagios_templates_contact_defaults + anro_nagios_templates_contact }}"
 
-anro_nagios_service_templates_defaults:
+
+
+_anro_nagios_templates_contactgroup_defaults: []
+# Silently combine
+_anro_nagios_templates_contactgroup: "{{ _anro_nagios_templates_contactgroup_defaults + anro_nagios_templates_contactgroup }}"
+
+
+_anro_nagios_templates_service_defaults:
   - name: 'generic-service'
     active_checks_enabled: 1
     passive_checks_enabled: 1
@@ -351,7 +381,11 @@ anro_nagios_service_templates_defaults:
     notification_period: '24x7'
     register: 0
 
-anro_nagios_timeperiod_templates_defaults:
+# Silently combine
+_anro_nagios_templates_service: "{{ _anro_nagios_templates_service_defaults + anro_nagios_templates_service }}"
+
+
+_anro_nagios_templates_timeperiod_defaults:
   - name: '24x7'
     timeperiod_name: '24x7'
     alias: '24 Hours A Day 7 Days A Week'
@@ -375,3 +409,6 @@ anro_nagios_timeperiod_templates_defaults:
   - name: 'none'
     timeperiod_name: 'none'
     alias: 'No Time Is A Good Time'
+
+# Silently combine
+_anro_nagios_templates_timeperiod: "{{ _anro_nagios_templates_timeperiod_defaults + _anro_nagios_templates_timeperiod }}"
