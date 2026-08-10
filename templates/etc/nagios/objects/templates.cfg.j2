@@ -3,8 +3,8 @@
 {# Host Template Definitions #}
 {% if _anro_nagios_templates_host is defined and
       _anro_nagios_templates_host | length > 0 %}
+# BEGIN HOST TEMPLATES
 {% for host in _anro_nagios_templates_host %}
-# HOST TEMPLATES
 define host {
 
 {% for key, value in host.items() %}
@@ -14,14 +14,14 @@ define host {
 }
 
 {% endfor %}
-
+# END HOST TEMPLATES
 {% endif %}
 
 {# Service Template Definitions #}
 {% if _anro_nagios_templates_service is defined and
       _anro_nagios_templates_service | length > 0 %}
+# BEGIN SERVICE TEMPLATES
 {% for service in _anro_nagios_templates_service %}
-# SERVICE TEMPLATES
 define service {
 
 {% for key, value in service.items() %}
@@ -31,14 +31,15 @@ define service {
 }
 
 {% endfor %}
-
+# END SERVICE TEMPLATES
 {% endif %}
 
 {# Contact Template Definitions #}
 {% if _anro_nagios_templates_contact is defined and
       _anro_nagios_templates_contact | length > 0 %}
+# BEGIN CONTACT TEMPLATES
 {% for contact in _anro_nagios_templates_contact %}
-# CONTACT TEMPLATES
+
 define contact {
 
 {% for key, value in contact.items() %}
@@ -48,14 +49,14 @@ define contact {
 }
 
 {% endfor %}
-
+# END CONTACT TEMPLATES
 {% endif %}
 
 {# Contact Group Template Definitions #}
 {% if _anro_nagios_templates_contactgroup is defined and
       _anro_nagios_templates_contactgroup | length > 0 %}
+# BEGIN CONTACT GROUP TEMPLATES
 {% for contactgroup in _anro_nagios_templates_contactgroup %}
-# CONTACTGROUP TEMPLATES
 define contact {
 
 {% for key, value in contactgroup.items() %}
@@ -65,5 +66,6 @@ define contact {
 }
 
 {% endfor %}
+# END CONTACT GROUP TEMPLATES
 
 {% endif %}

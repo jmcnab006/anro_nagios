@@ -262,7 +262,7 @@ _anro_nagios_contactgroups_defaults:
 # Silently combine
 _anro_nagios_contactgroups: "{{ _anro_nagios_contactgroups_defaults + anro_nagios_contactgroups }}"
 
-anro_nagios_templates_host_defaults:
+_anro_nagios_templates_host_defaults:
   - name: 'generic-host'
     check_command: 'check-host-alive!!!!!!!!'
     notifications_enabled: 1
@@ -411,4 +411,4 @@ _anro_nagios_templates_timeperiod_defaults:
     alias: 'No Time Is A Good Time'
 
 # Silently combine
-_anro_nagios_templates_timeperiod: "{{ _anro_nagios_templates_timeperiod_defaults + _anro_nagios_templates_timeperiod }}"
+_anro_nagios_templates_timeperiod: "{{ _anro_nagios_templates_timeperiod_defaults + anro_nagios_templates_timeperiod }}"
