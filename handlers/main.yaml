@@ -1,5 +1,6 @@
 - name: Test anro_nagios apache
   ansible.builtin.command: 'apachectl configtest'
+  listen: 'Restart anro_nagios services'
   register: _anro_nagios_apache_test
   failed_when:
     - '"Syntax OK" not in _anro_nagios_apache_test.stderr'
@@ -23,6 +24,7 @@
 
 - name: Test anro_nagios nagios
   ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_cfg_file }}"
+  listen: Restart anro_nagios services
   register: _anro_nagios_nagios_test
   failed_when:
     - '"Total Errors:   0" not in _anro_nagios_nagios_test.stderr'
@@ -32,7 +34,7 @@
     - _anro_nagios_nagios_test.rc == 0
   notify:
     - "Reload anro_nagios nagios"
-    - "Service anro_nagios started"
+    - "Service nagios started"
 
 - name: Reload anro_nagios nagios
   ansible.builtin.systemd_service:
@@ -48,3 +50,10 @@
   ansible.builtin.systemd_service:
     name: postfix
     state: restarted
+
+- name: Service nagios started
+  ansible.builtin.systemd_service:
+    name: nagios4
+    state: started
+    enabled: true
+  listen: 'Restart anro_nagios services'

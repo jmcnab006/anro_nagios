@@ -10,7 +10,7 @@
 - name: Configure nagios and apache
   ansible.builtin.import_tasks: configure.yaml
   when:
-    - anro_nagios_cfgure | bool
+    - anro_nagios_configure | bool
 
 
 # - name: Build nagios core from source

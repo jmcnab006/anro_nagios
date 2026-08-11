@@ -5,8 +5,7 @@ ansible:
       deprecation_warnings: false
       callbacks_enabled: profile_tasks
       pipelining: true
-      roles_path: /home/jmcnab/git
-
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/..
   executor:
     args:
       ansible_playbook:

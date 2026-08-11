@@ -10,9 +10,15 @@ container_volumes: # noqa: var-naming[no-role-prefix]
 container_tmpfs: # noqa: var-naming[no-role-prefix]
   - /run
   - /tmp
-
+container_published_ports:
+  - 8081:443
 # Role test variables
-#
+
+anro_nagios_cgi_cfg:
+  show_context_help: 1
+
+anro_nagios_cfg:
+  use_large_installation_tweaks: 1
 
 anro_nagios_domain: vacuus.biz
 anro_nagios_users:

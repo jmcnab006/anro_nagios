@@ -201,3 +201,15 @@
         mode: '0755'
       when:
         - anro_nagios_install_helper | bool
+
+    - name: CONFIGURE | Install twilio send_twilo_sms.sh
+      ansible.builtin.template:
+        src: etc/nagios/libexec/send_twilio_sms.sh.j2
+        dest: "/usr/lib/nagios/plugins/send_twilio_sms.sh"
+        owner: root
+        group: root
+        mode: '0751'
+      when:
+        - anro_nagios_twilio_number != ""
+        - anro_nagios_twilio_account_sid != ""
+        - anro_nagios_twilio_auth_token != ""

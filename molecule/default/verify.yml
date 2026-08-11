@@ -1,24 +1,69 @@
 ---
-- name: IMPORT | Verify facts and vars
-  hosts: server
+- name: Verify
+  hosts: all
+  gather_facts: false
   tasks:
-    - name: IMPORT | Verify facts and vars
-      ansible.builtin.import_tasks: verify/verify-facts_vars.yml
+    - name: Confirm host is reachable
+      ansible.builtin.ping:
 
-- name: IMPORT | Verify system configuration
-  hosts: server
-  tasks:
-    - name: IMPORT | Verify system configuration
-      ansible.builtin.import_tasks: verify/verify-system.yml
+    - name: Check nagios.cfg exists
+      ansible.builtin.stat:
+        path: /etc/nagios/nagios.cfg
+      register: cfg
 
-- name: IMPORT | Verify groups and users
-  hosts: server
-  tasks:
-    - name: IMPORT | Verify users
-      ansible.builtin.import_tasks: verify/verify-users.yml
+    - name: Validate nagios.cfg exists
+      ansible.builtin.assert:
+        that:
+          - cfg.stat.exists
+          - cfg.stat.isreg
 
-- name: IMPORT | Verify packages
-  hosts: server
-  tasks:
-    - name: IMPORT | Verify packages
-      ansible.builtin.import_tasks: verify/verify-packages.yml
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Verify nagios service exists
+      ansible.builtin.assert:
+        that:
+          - '"nagios4.service" in ansible_facts["services"]'
+        fail_msg: "nagios4.service was not found"
+
+    - name: Verify nagios service running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['nagios4.service'].state == 'running'
+        fail_msg: "nagios4.service is not running"
+
+    - name: Verify apache2 service exists
+      ansible.builtin.assert:
+        that:
+          - '"apache2.service" in ansible_facts["services"]'
+        fail_msg: "apache2.service was not found"
+
+    - name: Verify apache2 service running
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['apache2.service'].state == 'running'
+        fail_msg: "apache2.service is not running"
+
+    - name: Read cgi.cfg configuration file
+      ansible.builtin.slurp:
+        src: /etc/nagios/cgi.cfg
+      register: _cgi_file
+
+    # Role variables should change this value to 1
+    - name: Verify expected configuration cgi.cfg
+      ansible.builtin.assert:
+        that:
+          - "'show_context_help=1' in (_cgi_file.content | b64decode)"
+        fail_msg: "Expected configuration was not found"
+
+    - name: Read nagios.cfg configuration file
+      ansible.builtin.slurp:
+        src: /etc/nagios/nagios.cfg
+      register: _config_file
+
+    # Role variables should change this value to 1
+    - name: Verify expected configuration nagios.cfg
+      ansible.builtin.assert:
+        that:
+          - "'use_large_installation_tweaks=1' in (_config_file.content | b64decode)"
+        fail_msg: "Expected configuration was not found"

@@ -181,7 +181,7 @@ _anro_nagios_commands_defaults:
 
   - command_name: notify-service-by-sms
     command_line: >
-      /usr/bin/printf "%b" "*** USI Monitor ***\n
+      /usr/bin/printf "%b" "*** Nagios ***\n
       Notification Type: $NOTIFICATIONTYPE$\n
       Service: $SERVICEDESC$\n
       Host: $HOSTALIAS$\n
@@ -190,7 +190,7 @@ _anro_nagios_commands_defaults:
       Date/Time: $LONGDATETIME$\n
       Additional Info:\n
       $SERVICEOUTPUT$\n"
-      | $USER1$/send_sms.sh $CONTACTPAGER$
+      | $USER1$/send_twilio_sms.sh $CONTACTPAGER$
 
   - command_name: check_local_disk
     command_line: >
@@ -238,8 +238,21 @@ _anro_nagios_commands_defaults:
       /usr/bin/printf "%b" "$LASTSERVICECHECK$\t$HOSTNAME$\t$SERVICEDESC$\t$SERVICESTATE$\t$SERVICEATTEMPT$\t$SERVICESTATETYPE$\t$SERVICEEXECUTIONTIME$\t$SERVICELATENCY$\t$SERVICEOUTPUT$\t$SERVICEPERFDATA$\n" >> /var/lib/nagios4/service-perfdata.out
   # yamllint enable rule:line-length
 
-# Silently combine
-_anro_nagios_commands: "{{ _anro_nagios_commands_defaults + anro_nagios_commands }}"
+# Silently combine the lists overwriting elements
+# _anro_nagios_commands: "{{ _anro_nagios_commands_defaults + anro_nagios_commands }}"
+_anro_nagios_commands: >-
+  {{
+    (
+      _anro_nagios_commands_defaults
+      | rejectattr(
+          'command_name',
+          'in',
+          anro_nagios_commands | map(attribute='command_name') | list
+        )
+      | list
+    )
+    + anro_nagios_commands
+  }}
 
 _anro_nagios_contacts_defaults:
   - contact_name: 'nagiosadmin'
@@ -252,16 +265,43 @@ _anro_nagios_contacts_defaults:
     alias: 'noemail'
 
 # Silently combine
-_anro_nagios_contacts: "{{ _anro_nagios_contacts_defaults + anro_nagios_contacts }}"
+# _anro_nagios_contacts: "{{ _anro_nagios_contacts_defaults + anro_nagios_contacts }}"
+_anro_nagios_contacts: >-
+  {{
+    (
+      _anro_nagios_contacts_defaults
+      | rejectattr(
+          'contact_name',
+          'in',
+          anro_nagios_contacts | map(attribute='contact_name') | list
+        )
+      | list
+    )
+    + anro_nagios_contacts
+  }}
 
 _anro_nagios_contactgroups_defaults:
   - contactgroup_name: 'admins'
-    alias: 'Nagios Admin'
+    alias: 'Nagios Admins'
     members: 'nagiosadmin'
 
-# Silently combine
-_anro_nagios_contactgroups: "{{ _anro_nagios_contactgroups_defaults + anro_nagios_contactgroups }}"
+# Silently combine overwriting named elements
+# _anro_nagios_contactgroups: "{{ _anro_nagios_contactgroups_defaults + anro_nagios_contactgroups }}"
+_anro_nagios_contactgroups: >-
+  {{
+    (
+      _anro_nagios_contactgroups_defaults
+      | rejectattr(
+          'contactgroup_name',
+          'in',
+          anro_nagios_contactgroups | map(attribute='contactgroup_name') | list
+        )
+      | list
+    )
+    + anro_nagios_contactgroups
+  }}
 
+# Nagios Templates (HOST)
 _anro_nagios_templates_host_defaults:
   - name: 'generic-host'
     check_command: 'check-host-alive!!!!!!!!'
@@ -294,10 +334,23 @@ _anro_nagios_templates_host_defaults:
     contacts: 'noemail'
     register: 0
 
-# Silently combine
-_anro_nagios_templates_host: "{{ _anro_nagios_templates_host_defaults + anro_nagios_templates_host }}"
+# Silently combine overwriting named elements
+# _anro_nagios_templates_host: "{{ _anro_nagios_templates_host_defaults + anro_nagios_templates_host }}"
+_anro_nagios_templates_host: >-
+  {{
+    (
+      _anro_nagios_templates_host_defaults
+      | rejectattr(
+          'name',
+          'in',
+          anro_nagios_templates_host | map(attribute='name') | list
+        )
+      | list
+    )
+    + anro_nagios_templates_host
+  }}
 
-
+# Nagios Templates (CONTACT)
 _anro_nagios_templates_contact_defaults:
   - name: 'generic-contact'
     service_notification_period: '24x7'
@@ -308,15 +361,38 @@ _anro_nagios_templates_contact_defaults:
     host_notification_commands: 'notify-host-by-email'
     register: 0
 
-# Silently combine
-_anro_nagios_templates_contact: "{{ _anro_nagios_templates_contact_defaults + anro_nagios_templates_contact }}"
-
-
+# Silently combine overwriting named elements
+# _anro_nagios_templates_contact: "{{ _anro_nagios_templates_contact_defaults + anro_nagios_templates_contact }}"
+_anro_nagios_templates_contact: >-
+  {{
+    (
+      _anro_nagios_templates_contact_defaults
+      | rejectattr(
+          'name',
+          'in',
+          anro_nagios_templates_contact | map(attribute='name') | list
+        )
+      | list
+    )
+    + anro_nagios_templates_contact
+  }}
 
 _anro_nagios_templates_contactgroup_defaults: []
-# Silently combine
-_anro_nagios_templates_contactgroup: "{{ _anro_nagios_templates_contactgroup_defaults + anro_nagios_templates_contactgroup }}"
-
+# Silently combine overwriting named elements
+# _anro_nagios_templates_contactgroup: "{{ _anro_nagios_templates_contactgroup_defaults + anro_nagios_templates_contactgroup }}"
+_anro_nagios_templates_contactgroup: >-
+  {{
+    (
+      _anro_nagios_templates_contactgroup_defaults
+      | rejectattr(
+          'name',
+          'in',
+          anro_nagios_templates_contactgroup | map(attribute='name') | list
+        )
+      | list
+    )
+    + anro_nagios_templates_contactgroup
+  }}
 
 _anro_nagios_templates_service_defaults:
   - name: 'generic-service'
@@ -381,8 +457,21 @@ _anro_nagios_templates_service_defaults:
     notification_period: '24x7'
     register: 0
 
-# Silently combine
-_anro_nagios_templates_service: "{{ _anro_nagios_templates_service_defaults + anro_nagios_templates_service }}"
+# Silently combine overwriting named elements
+# _anro_nagios_templates_service: "{{ _anro_nagios_templates_service_defaults + anro_nagios_templates_service }}"
+_anro_nagios_templates_service: >-
+  {{
+    (
+      _anro_nagios_templates_service_defaults
+      | rejectattr(
+          'name',
+          'in',
+          anro_nagios_templates_service | map(attribute='name') | list
+        )
+      | list
+    )
+    + anro_nagios_templates_service
+  }}
 
 
 _anro_nagios_templates_timeperiod_defaults:
@@ -410,5 +499,18 @@ _anro_nagios_templates_timeperiod_defaults:
     timeperiod_name: 'none'
     alias: 'No Time Is A Good Time'
 
-# Silently combine
-_anro_nagios_templates_timeperiod: "{{ _anro_nagios_templates_timeperiod_defaults + anro_nagios_templates_timeperiod }}"
+# Silently combine overwriting named elements
+# _anro_nagios_templates_timeperiod: "{{ _anro_nagios_templates_timeperiod_defaults + anro_nagios_templates_timeperiod }}"
+_anro_nagios_templates_timeperiod: >-
+  {{
+    (
+      _anro_nagios_templates_timeperiod_defaults
+      | rejectattr(
+          'name',
+          'in',
+          anro_nagios_templates_timeperiod | map(attribute='name') | list
+        )
+      | list
+    )
+    + anro_nagios_templates_timeperiod
+  }}

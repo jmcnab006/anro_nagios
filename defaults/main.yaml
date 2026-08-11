@@ -1,6 +1,6 @@
 anro_nagios_enabled: true
 anro_nagios_install: true
-anro_nagios_cfgure: true
+anro_nagios_configure: true
 anro_nagios_install_helper: true
 
 
@@ -80,3 +80,9 @@ anro_nagios_templates_contact: []
 anro_nagios_templates_contactgroup: []
 anro_nagios_templates_service: []
 anro_nagios_templates_timeperiod: []
+
+# if sms messaging is enabled with twilo these should be populated
+
+anro_nagios_twilio_number: ""
+anro_nagios_twilio_account_sid: ""
+anro_nagios_twilio_auth_token: ""

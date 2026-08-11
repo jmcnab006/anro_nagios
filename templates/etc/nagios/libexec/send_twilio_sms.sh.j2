@@ -1,0 +1,12 @@
+#!/bin/sh
+TWILIO_NUMBER="{{ anro_nagios_twilio_number | default("") }}"
+TWILIO_ACCOUNT_SID="{{ anro_nagios_twilio_account_sid | default("") }}"
+TWILIO_AUTH_TOKEN="{{ anro_nagios_twilio_auth_token | default("") }}"
+TO=$1
+BODY=`cat`
+FBODY="$BODY"
+curl -X POST https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json \
+-u ${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN} \
+--data-urlencode "From=${TWILIO_NUMBER}" \
+--data-urlencode "To=+1${TO}" \
+--data-urlencode "Body=${FBODY}"

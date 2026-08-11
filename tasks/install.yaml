@@ -55,7 +55,7 @@
 
 - name: INSTALL | Create /etc/mailname
   ansible.builtin.copy:
-    content: "{{ inventory_hostname }}.{{ anro_nagios_domain | default(omit)}}"
+    content: "{{ inventory_hostname }}.{{ anro_nagios_domain | default('example.com') }}"
     dest: /etc/mailname
     owner: root
     group: root

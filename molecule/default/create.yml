@@ -15,10 +15,8 @@
         tmpfs: "{{ hostvars[item]['container_tmpfs'] | default(omit) }}"
         cgroupns_mode: host
         state: started
-        exposed_ports:
-          - 443
-        published_ports:
-          - 8081:443
+        exposed_ports: "{{ hostvars[item]['container_exposed_ports'] | default(omit) }}"
+        published_ports: "{{ hostvars[item]['container_published_ports'] | default(omit) }}"
       register: _create_results
       loop: "{{ groups['server'] }}"
       loop_control:
