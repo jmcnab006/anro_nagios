@@ -25,13 +25,13 @@
       - unzip
     state: present
 
-- name: Ensure the service is started and enabled
-  ansible.builtin.service:
-    name: "{{ anro_nagios_service }}"
-    enabled: "{{ anro_nagios_service_enabled }}"
-    state: "{{ anro_nagios_service_state }}"
-  notify:
-    - "Test anro_nagios nagios"
+# - name: Ensure the service is started and enabled
+#  ansible.builtin.service:
+#    name: "{{ anro_nagios_service }}"
+#    enabled: "{{ anro_nagios_service_enabled }}"
+#    state: "{{ anro_nagios_service_state }}"
+#  notify:
+#    - 'anro_nagios : Validate nagios'
 
 - name: INSTALL | Install perl apt packages
   ansible.builtin.apt:
@@ -70,7 +70,7 @@
     group: root
     mode: "0644"
   notify:
-    - "Restart anro_nagios postfix"
+    - 'anro_nagios : Restart postfix'
 
 - name: INSTALL | Install additional packages
   ansible.builtin.apt:

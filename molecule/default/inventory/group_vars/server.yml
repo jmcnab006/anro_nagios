@@ -24,3 +24,9 @@ anro_nagios_domain: vacuus.biz
 anro_nagios_users:
   - name: jmcnab
     password: 'changeme'
+
+anro_nagios_templates_service:
+  - name: 'cisco-service'
+    use: 'generic-service'
+    max_check_attempts: 3
+    register: 0

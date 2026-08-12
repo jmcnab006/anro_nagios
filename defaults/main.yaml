@@ -38,6 +38,8 @@ anro_nagios_remove_packages: []
 # default auth realm as defined in apache configuration
 anro_nagios_auth_realm: "monitoring"
 
+anro_nagios_apache_server_admin: root@localhost
+
 # Apache htpassword users location
 anro_nagios_htpasswd_file: /etc/nagios4/htpassword.users
 

@@ -259,10 +259,10 @@ _anro_nagios_contacts_defaults:
     use: 'generic-contact'
     alias: 'Nagios Admin'
     email: 'nagios@localhost'
-
-  - contact_name: 'noemail'
+  # generic contact name for no contact
+  - contact_name: 'no-contact'
     use: 'generic-contact'
-    alias: 'noemail'
+    alias: 'no-contact'
 
 # Silently combine
 # _anro_nagios_contacts: "{{ _anro_nagios_contacts_defaults + anro_nagios_contacts }}"
@@ -315,7 +315,7 @@ _anro_nagios_templates_host_defaults:
     check_interval: 1
     retry_interval: 1
     check_period: '24x7'
-    contacts: 'noemail'
+    contacts: 'no-contact'
     notification_interval: 60
     notification_period: '24x7'
     statusmap_image: "tag2.gd2"
@@ -331,7 +331,7 @@ _anro_nagios_templates_host_defaults:
     notification_period: 'workhours'
     notification_interval: 120
     notification_options: 'd,u,r'
-    contacts: 'noemail'
+    contacts: 'no-contact'
     register: 0
 
 # Silently combine overwriting named elements
@@ -412,7 +412,7 @@ _anro_nagios_templates_service_defaults:
     max_check_attempts: 3
     check_interval: 1
     retry_interval: 1
-    contacts: 'noemail'
+    contacts: 'no-contact'
     notification_options: 'w,u,c,r'
     notification_interval: 60
     notification_period: '24x7'
@@ -423,38 +423,6 @@ _anro_nagios_templates_service_defaults:
     max_check_attempts: 4
     check_interval: 5
     retry_interval: 1
-    register: 0
-
-  - name: 'disk-service'
-    use: 'generic-service'
-    max_check_attempts: 5
-    check_interval: 5
-    retry_interval: 1
-    contacts: 'noemail'
-    register: 0
-
-  - name: 'cisco-service'
-    active_checks_enabled: 1
-    passive_checks_enabled: 1
-    parallelize_check: 1
-    obsess_over_service: 1
-    check_freshness: 0
-    notifications_enabled: 1
-    event_handler_enabled: 1
-    flap_detection_enabled: 1
-    process_perf_data: 1
-    retain_status_information: 1
-    retain_nonstatus_information: 1
-    is_volatile: 0
-    check_period: '24x7'
-    contact_groups: 'admins'
-    max_check_attempts: 5
-    check_interval: 5
-    retry_interval: 1
-    contacts: 'noemail'
-    notification_options: 'w,u,c,r'
-    notification_interval: 60
-    notification_period: '24x7'
     register: 0
 
 # Silently combine overwriting named elements
