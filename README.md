@@ -1,4 +1,9 @@
-# anro_nagios
+
+# ANsible ROle nagios
+
+`anro_nagios` is an Ansible role for building and managing persistent Linux `nagios` monitoring configurations on Debian and Ubuntu systems.
+
+---
 
 Ansible role for installing and managing Nagios Core on Ubuntu 20.04 and newer.
 
