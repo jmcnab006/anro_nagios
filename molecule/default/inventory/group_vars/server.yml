@@ -30,3 +30,8 @@ anro_nagios_templates_service:
     use: 'generic-service'
     max_check_attempts: 3
     register: 0
+
+# Custom command used to prove role-provided Nagios objects are loaded.
+anro_nagios_commands:
+  - command_name: check_molecule_marker
+    command_line: /usr/lib/nagios/plugins/check_dummy 0 "Molecule command OK"

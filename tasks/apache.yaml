@@ -1,0 +1,81 @@
+---
+- name: Enable required Apache modules
+  community.general.apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - cgi
+    - rewrite
+    - ssl
+  notify: Validate Apache configuration
+
+- name: Enable Apache LDAP authentication module
+  community.general.apache2_module:
+    name: authnz_ldap
+    state: present
+  when: anro_nagios_use_ldap | bool
+  notify: Validate Apache configuration
+
+- name: Configure Apache default site
+  ansible.builtin.template:
+    src: etc/apache2/sites-available/default.conf.j2
+    dest: /etc/apache2/sites-available/default.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Validate Apache configuration
+
+- name: Configure Apache Nagios site
+  ansible.builtin.template:
+    src: etc/apache2/sites-available/nagios.conf.j2
+    dest: /etc/apache2/sites-available/nagios.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Validate Apache configuration
+
+- name: Configure Apache LDAP authentication
+  ansible.builtin.template:
+    src: etc/apache2/conf-available/ldap.conf.j2
+    dest: /etc/apache2/conf-available/ldap.conf
+    owner: root
+    group: www-data
+    mode: "0640"
+  when: anro_nagios_use_ldap | bool
+  no_log: true
+  notify: Validate Apache configuration
+
+- name: Remove Apache LDAP authentication configuration when disabled
+  ansible.builtin.file:
+    path: /etc/apache2/conf-enabled/ldap.conf
+    state: absent
+  when: not (anro_nagios_use_ldap | bool)
+  notify: Validate Apache configuration
+
+- name: Enable Apache default site
+  ansible.builtin.file:
+    src: /etc/apache2/sites-available/default.conf
+    dest: /etc/apache2/sites-enabled/default.conf
+    state: link
+  notify: Validate Apache configuration
+
+- name: Enable Apache Nagios site
+  ansible.builtin.file:
+    src: /etc/apache2/sites-available/nagios.conf
+    dest: /etc/apache2/sites-enabled/nagios.conf
+    state: link
+  notify: Validate Apache configuration
+
+- name: Enable Apache LDAP authentication configuration
+  ansible.builtin.file:
+    src: /etc/apache2/conf-available/ldap.conf
+    dest: /etc/apache2/conf-enabled/ldap.conf
+    state: link
+  when: anro_nagios_use_ldap | bool
+  notify: Validate Apache configuration
+
+- name: Disable packaged Apache default site
+  ansible.builtin.file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+  notify: Validate Apache configuration

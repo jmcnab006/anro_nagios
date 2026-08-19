@@ -1,69 +1,191 @@
 ---
-- name: Verify
-  hosts: all
-  gather_facts: false
+- name: Verify Nagios role end to end
+  hosts: server
+  become: true
+  gather_facts: true
+
+  vars:
+    molecule_required_packages:
+      - apache2
+      - nagios4
+      - postfix
+      - python3-passlib
+
   tasks:
-    - name: Confirm host is reachable
-      ansible.builtin.ping:
+    - name: Gather installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
 
-    - name: Check nagios.cfg exists
-      ansible.builtin.stat:
-        path: /etc/nagios/nagios.cfg
-      register: cfg
-
-    - name: Validate nagios.cfg exists
+    - name: Verify required Nagios packages are installed
       ansible.builtin.assert:
         that:
-          - cfg.stat.exists
-          - cfg.stat.isreg
+          - item in ansible_facts.packages
+        fail_msg: "Required package {{ item }} is not installed."
+      loop: "{{ molecule_required_packages }}"
+
+    - name: Validate Apache configuration
+      ansible.builtin.command:
+        argv:
+          - apachectl
+          - configtest
+      register: molecule_apache_configtest
+      changed_when: false
+
+    - name: Verify Apache configuration validation succeeded
+      ansible.builtin.assert:
+        that:
+          - molecule_apache_configtest.rc == 0
+          - >-
+            'Syntax OK' in
+            (molecule_apache_configtest.stdout ~ molecule_apache_configtest.stderr)
+
+    - name: Validate Nagios configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/nagios4
+          - -v
+          - /etc/nagios4/nagios.cfg
+      register: molecule_nagios_configtest
+      changed_when: false
+
+    - name: Verify Nagios configuration validation succeeded
+      ansible.builtin.assert:
+        that:
+          - molecule_nagios_configtest.rc == 0
+          - >-
+            'Total Errors:   0' in
+            (molecule_nagios_configtest.stdout ~ molecule_nagios_configtest.stderr)
 
     - name: Gather service facts
       ansible.builtin.service_facts:
 
-    - name: Verify nagios service exists
+    - name: Verify managed services are running
       ansible.builtin.assert:
         that:
-          - '"nagios4.service" in ansible_facts["services"]'
-        fail_msg: "nagios4.service was not found"
+          - item in ansible_facts.services
+          - ansible_facts.services[item].state == 'running'
+        fail_msg: "{{ item }} is missing or not running."
+      loop:
+        - apache2.service
+        - nagios4.service
+        - postfix.service
 
-    - name: Verify nagios service running
+    - name: Stat generated Nagios configuration files
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      register: molecule_nagios_config_stats
+      loop:
+        - path: /etc/nagios4/nagios.cfg
+          mode: "0644"
+        - path: /etc/nagios4/cgi.cfg
+          mode: "0644"
+        - path: /etc/nagios4/resource.cfg
+          mode: "0640"
+        - path: /etc/nagios4/objects/commands.cfg
+          mode: "0640"
+        - path: /etc/nagios4/objects/contacts.cfg
+          mode: "0640"
+        - path: /etc/nagios4/objects/templates.cfg
+          mode: "0640"
+        - path: /etc/nagios4/objects/timeperiods.cfg
+          mode: "0640"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Verify generated Nagios configuration permissions
       ansible.builtin.assert:
         that:
-          - ansible_facts.services['nagios4.service'].state == 'running'
-        fail_msg: "nagios4.service is not running"
+          - item.stat.exists
+          - item.stat.isreg
+          - item.stat.mode == item.item.mode
+        fail_msg: >-
+          {{ item.item.path }} is missing or has mode {{ item.stat.mode | default('unknown') }};
+          expected {{ item.item.mode }}.
+      loop: "{{ molecule_nagios_config_stats.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
 
-    - name: Verify apache2 service exists
+    - name: Stat Nagios htpasswd file
+      ansible.builtin.stat:
+        path: /etc/nagios4/htpassword.users
+      register: molecule_htpasswd_stat
+
+    - name: Verify Nagios htpasswd file permissions
       ansible.builtin.assert:
         that:
-          - '"apache2.service" in ansible_facts["services"]'
-        fail_msg: "apache2.service was not found"
+          - molecule_htpasswd_stat.stat.exists
+          - molecule_htpasswd_stat.stat.isreg
+          - molecule_htpasswd_stat.stat.mode == '0640'
+          - molecule_htpasswd_stat.stat.pw_name == 'root'
+          - molecule_htpasswd_stat.stat.gr_name == 'www-data'
 
-    - name: Verify apache2 service running
-      ansible.builtin.assert:
-        that:
-          - ansible_facts.services['apache2.service'].state == 'running'
-        fail_msg: "apache2.service is not running"
-
-    - name: Read cgi.cfg configuration file
+    - name: Read rendered CGI configuration
       ansible.builtin.slurp:
-        src: /etc/nagios/cgi.cfg
-      register: _cgi_file
+        src: /etc/nagios4/cgi.cfg
+      register: molecule_cgi_config
 
-    # Role variables should change this value to 1
-    - name: Verify expected configuration cgi.cfg
+    - name: Verify CGI configuration override was rendered
       ansible.builtin.assert:
         that:
-          - "'show_context_help=1' in (_cgi_file.content | b64decode)"
-        fail_msg: "Expected configuration was not found"
+          - "'show_context_help=1' in (molecule_cgi_config.content | b64decode)"
 
-    - name: Read nagios.cfg configuration file
+    - name: Read rendered Nagios configuration
       ansible.builtin.slurp:
-        src: /etc/nagios/nagios.cfg
-      register: _config_file
+        src: /etc/nagios4/nagios.cfg
+      register: molecule_nagios_config
 
-    # Role variables should change this value to 1
-    - name: Verify expected configuration nagios.cfg
+    - name: Verify Nagios configuration override was rendered
       ansible.builtin.assert:
         that:
-          - "'use_large_installation_tweaks=1' in (_config_file.content | b64decode)"
-        fail_msg: "Expected configuration was not found"
+          - >-
+            'use_large_installation_tweaks=1' in
+            (molecule_nagios_config.content | b64decode)
+
+    - name: Read rendered Nagios commands
+      ansible.builtin.slurp:
+        src: /etc/nagios4/objects/commands.cfg
+      register: molecule_commands_config
+
+    - name: Verify custom Nagios command was rendered
+      ansible.builtin.assert:
+        that:
+          - >-
+            'check_molecule_marker' in
+            (molecule_commands_config.content | b64decode)
+          - >-
+            'Molecule command OK' in
+            (molecule_commands_config.content | b64decode)
+
+    - name: Verify unauthenticated Nagios request is rejected
+      ansible.builtin.uri:
+        url: https://127.0.0.1/nagios/
+        validate_certs: false
+        status_code: 401
+
+    - name: Verify invalid Nagios credentials are rejected
+      ansible.builtin.uri:
+        url: https://127.0.0.1/nagios/
+        url_username: "{{ anro_nagios_users[0].name }}"
+        url_password: invalid-password
+        force_basic_auth: true
+        validate_certs: false
+        status_code: 401
+      no_log: true
+
+    - name: Verify authenticated Nagios web interface is reachable
+      ansible.builtin.uri:
+        url: https://127.0.0.1/nagios/
+        url_username: "{{ anro_nagios_users[0].name }}"
+        url_password: "{{ anro_nagios_users[0].password }}"
+        force_basic_auth: true
+        follow_redirects: all
+        validate_certs: false
+        return_content: true
+        status_code: 200
+      register: molecule_authenticated_request
+      no_log: true
+
+    - name: Verify Nagios web content was returned
+      ansible.builtin.assert:
+        that:
+          - molecule_authenticated_request.content | length > 0

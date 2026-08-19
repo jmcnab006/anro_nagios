@@ -6,6 +6,33 @@ anro_nagios_install_helper: true
 
 anro_nagios_package_state: present
 
+# Base packages required by the role. Override only when adapting the role to a
+# compatible distribution/package set.
+anro_nagios_packages:
+  - postfix
+  - mailutils
+  - apache2
+  - libapache2-mod-php
+  - monitoring-plugins-contrib
+  - nagios4
+  - openssl
+  - ssl-cert
+  - perl
+  - php
+  - php-gd
+  - python3-passlib
+  - wget
+  - unzip
+  - libnet-snmp-perl
+  - libcrypt-x509-perl
+  - libdatetime-format-dateparse-perl
+  - libwww-perl
+  - libjson-perl
+  - libjson-parse-perl
+  - liblwp-protocol-https-perl
+  - libtext-glob-perl
+  - libdbd-mysql-perl
+
 # Set our domain for configuring the webserver and postfix
 anro_nagios_domain: "example.com"
 

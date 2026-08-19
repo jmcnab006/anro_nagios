@@ -1,75 +1,52 @@
-- name: Validate apache
-  ansible.builtin.command: 'apachectl configtest'
-  register: _anro_nagios_apache_test
+---
+- name: Validate Apache configuration
+  ansible.builtin.command:
+    argv:
+      - apachectl
+      - configtest
+  register: _anro_nagios_apache_configtest
+  changed_when: false
   failed_when:
-    - '"Syntax OK" not in _anro_nagios_apache_test.stderr'
-    - _anro_nagios_apache_test.rc != 0
-  changed_when:
-    - '"Syntax OK" in _anro_nagios_apache_test.stderr'
-    - _anro_nagios_apache_test.rc == 0
-  notify:
-    - 'anro_nagios : Reload apache'
+    - _anro_nagios_apache_configtest.rc != 0 or
+      'Syntax OK' not in (_anro_nagios_apache_configtest.stderr ~ _anro_nagios_apache_configtest.stdout)
+  notify: Reload Apache
 
-- name: Reload apache
-  ansible.builtin.systemd_service:
+- name: Reload Apache
+  ansible.builtin.service:
     name: apache2
     state: reloaded
-  listen:
-    - certificate updated
-    - cert updated
-    - cert update
   throttle: 1
   register: _anro_nagios_apache_reload
   until: _anro_nagios_apache_reload is succeeded
   retries: 5
   delay: 2
+  listen:
+    - Reload Apache
+    - certificate updated
+    - cert updated
+    - cert update
 
-- name: Validate nagios
+- name: Validate Nagios configuration
   ansible.builtin.command:
-    cmd: "{{ anro_nagios_binary }} -v {{ anro_nagios_cfg_file }}"
-  changed_when: true
-  notify:
-    - 'anro_nagios : Reload nagios'
-    - 'anro_nagios : Start nagios'
+    argv:
+      - "{{ anro_nagios_binary }}"
+      - -v
+      - "{{ anro_nagios_cfg_file }}"
+  register: _anro_nagios_configtest
+  changed_when: false
+  failed_when: >-
+    _anro_nagios_configtest.rc != 0 or
+    'Total Errors:   0' not in
+    (_anro_nagios_configtest.stdout ~ _anro_nagios_configtest.stderr)
+  notify: Reload Nagios
 
-- name: Reload nagios
-  ansible.builtin.systemd_service:
+- name: Reload Nagios
+  ansible.builtin.service:
     name: "{{ anro_nagios_service }}"
     state: reloaded
+  when: anro_nagios_service_state != 'stopped'
 
-- name: Start nagios
-  ansible.builtin.systemd_service:
-    name: nagios4
-    state: started
-    enabled: true
-
-- name: Restart postfix
-  ansible.builtin.systemd_service:
+- name: Restart Postfix
+  ansible.builtin.service:
     name: postfix
     state: restarted
-
-# - name: Test anro_nagios nagios
-#   ansible.builtin.command: "{{ anro_nagios_binary }} -v {{ anro_nagios_cfg_file }}"
-#   listen: Restart anro_nagios services
-#   register: _anro_nagios_nagios_test
-#   failed_when:
-#     - '"Total Errors:   0" not in _anro_nagios_nagios_test.stderr'
-#     - _anro_nagios_nagios_test.rc != 0
-#   changed_when:
-#     - '"Total Errors:   0" in _anro_nagios_nagios_test.stderr'
-#     - _anro_nagios_nagios_test.rc == 0
-#   notify:
-#     - "Reload anro_nagios nagios"
-#     - "Service nagios started"
-#
-# - name: Reload anro_nagios nagios
-#  ansible.builtin.systemd_service:
-#    name: "{{ anro_nagios_service }}"
-#    state: reloaded
-#  throttle: 1
-#  register: _anro_nagios_nagios_reload
-#  until: _anro_nagios_nagios_reload is succeeded
-#  retries: 5
-#  delay: 2
-#  listen: Restart anro_nagios services
-

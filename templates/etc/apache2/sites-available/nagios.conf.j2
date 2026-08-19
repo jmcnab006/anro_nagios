@@ -1,6 +1,6 @@
 {{ ansible_managed | comment }}
 # apache configuration for nagios 4.x
-ServerName {{ inventory_hostname }}.{{ anro_nagios_domain | default('example.com')}}
+ServerName {{ inventory_hostname }}.{{ anro_nagios_domain }}
 
 ScriptAlias /nagios/cgi-bin /usr/lib/cgi-bin/nagios4
 

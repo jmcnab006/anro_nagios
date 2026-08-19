@@ -1,17 +1,42 @@
 ---
-# - name: Import prerequisites
-#  ansible.builtin.import_tasks: prerequisites.yaml
+- name: Validate Nagios role configuration
+  ansible.builtin.import_tasks: validate.yaml
+  when: anro_nagios_enabled | bool
 
-- name: Install nagios from repository
+- name: Install Nagios packages
   ansible.builtin.import_tasks: install.yaml
   when:
+    - anro_nagios_enabled | bool
     - anro_nagios_install | bool
 
-- name: Configure nagios and apache
-  ansible.builtin.import_tasks: configure.yaml
+- name: Configure Postfix
+  ansible.builtin.import_tasks: postfix.yaml
   when:
+    - anro_nagios_enabled | bool
     - anro_nagios_configure | bool
 
+- name: Configure Nagios authentication
+  ansible.builtin.import_tasks: authentication.yaml
+  when:
+    - anro_nagios_enabled | bool
+    - anro_nagios_configure | bool
 
-# - name: Build nagios core from source
-#  ansible.builtin.import_tasks: build-nagios.yaml
+- name: Configure Apache
+  ansible.builtin.import_tasks: apache.yaml
+  when:
+    - anro_nagios_enabled | bool
+    - anro_nagios_configure | bool
+
+- name: Configure Nagios
+  ansible.builtin.import_tasks: nagios.yaml
+  when:
+    - anro_nagios_enabled | bool
+    - anro_nagios_configure | bool
+
+- name: Apply pending configuration handlers
+  ansible.builtin.meta: flush_handlers
+  when: anro_nagios_enabled | bool
+
+- name: Manage Nagios services
+  ansible.builtin.import_tasks: services.yaml
+  when: anro_nagios_enabled | bool

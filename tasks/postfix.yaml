@@ -1,0 +1,19 @@
+---
+- name: Configure system mail name
+  ansible.builtin.copy:
+    content: "{{ inventory_hostname }}.{{ anro_nagios_domain }}\n"
+    dest: /etc/mailname
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ anro_nagios_force }}"
+  notify: Restart Postfix
+
+- name: Configure Postfix
+  ansible.builtin.template:
+    src: etc/postfix/main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Postfix

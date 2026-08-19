@@ -1,6 +1,7 @@
 ---
 - name: Converge
   hosts: server
+  become: true
 
   roles:
     - role: anro_nagios

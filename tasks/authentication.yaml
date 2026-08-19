@@ -1,0 +1,16 @@
+---
+- name: Configure Nagios web users
+  community.general.htpasswd:
+    path: "{{ anro_nagios_htpasswd_file }}"
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    state: present
+    owner: root
+    group: www-data
+    mode: "0640"
+  loop: "{{ anro_nagios_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: anro_nagios_users | length > 0
+  no_log: true
+  notify: Validate Apache configuration

@@ -1,7 +1,7 @@
 {{ ansible_managed | comment }}
 # Rewrite to https
 <VirtualHost *:80>
-    ServerAdmin {{ anro_nagios_apache_server_admin | default('root@localhost')}}
+    ServerAdmin {{ anro_nagios_apache_server_admin }}
     DocumentRoot /var/www/html
     ErrorLog ${APACHE_LOG_DIR}/error.log
     CustomLog ${APACHE_LOG_DIR}/access.log combined
@@ -9,7 +9,7 @@
         RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
 </VirtualHost>
 <VirtualHost *:443>
-    ServerAdmin {{ anro_nagios_apache_server_admin | default('root@localhost')}}
+    ServerAdmin {{ anro_nagios_apache_server_admin }}
     DocumentRoot /var/www/html
     SSLEngine On
     SSLHonorCipherOrder on

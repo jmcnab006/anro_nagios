@@ -1,0 +1,145 @@
+---
+- name: Create compatibility symlink for Nagios configuration
+  ansible.builtin.file:
+    src: "{{ anro_nagios_cfg_path }}"
+    dest: /etc/nagios
+    state: link
+    force: "{{ anro_nagios_force }}"
+  when: anro_nagios_cfg_path != '/etc/nagios'
+  notify: Validate Nagios configuration
+
+- name: Configure Nagios CGI settings
+  ansible.builtin.template:
+    src: etc/nagios/cgi.cfg.j2
+    dest: "{{ anro_nagios_cfg_path }}/cgi.cfg"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Validate Nagios configuration
+
+- name: Configure Nagios core settings
+  ansible.builtin.template:
+    src: etc/nagios/nagios.cfg.j2
+    dest: "{{ anro_nagios_cfg_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Validate Nagios configuration
+
+- name: Configure Nagios resource settings
+  ansible.builtin.template:
+    src: etc/nagios/resource.cfg.j2
+    dest: "{{ anro_nagios_cfg_path }}/resource.cfg"
+    owner: root
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  no_log: true
+  notify: Validate Nagios configuration
+
+- name: Create Nagios custom object directories
+  ansible.builtin.file:
+    path: "{{ anro_nagios_objects_path }}/{{ item }}"
+    state: directory
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0750"
+  loop:
+    - commands
+    - contacts
+    - hosts/default
+    - templates
+    - timeperiods
+
+- name: Create Nagios configuration backup directory
+  ansible.builtin.file:
+    path: "{{ anro_nagios_cfg_backup_path }}"
+    state: directory
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0750"
+
+- name: Remove unused packaged Nagios object configurations
+  ansible.builtin.file:
+    path: "{{ anro_nagios_objects_path }}/{{ item }}"
+    state: absent
+  loop:
+    - printer.cfg
+    - switch.cfg
+    - windows.cfg
+  notify: Validate Nagios configuration
+
+- name: Create Nagios service definitions directory
+  ansible.builtin.file:
+    path: "{{ anro_nagios_cfg_path }}/servicedefs"
+    state: directory
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0750"
+
+- name: Configure default Nagios commands
+  ansible.builtin.template:
+    src: etc/nagios/objects/commands.cfg.j2
+    dest: "{{ anro_nagios_objects_path }}/commands.cfg"
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  notify: Validate Nagios configuration
+
+- name: Configure default Nagios contacts
+  ansible.builtin.template:
+    src: etc/nagios/objects/contacts.cfg.j2
+    dest: "{{ anro_nagios_objects_path }}/contacts.cfg"
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  notify: Validate Nagios configuration
+
+- name: Configure default Nagios templates
+  ansible.builtin.template:
+    src: etc/nagios/objects/templates.cfg.j2
+    dest: "{{ anro_nagios_objects_path }}/templates.cfg"
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  notify: Validate Nagios configuration
+
+- name: Configure default Nagios time periods
+  ansible.builtin.template:
+    src: etc/nagios/objects/timeperiods.cfg.j2
+    dest: "{{ anro_nagios_objects_path }}/timeperiods.cfg"
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  notify: Validate Nagios configuration
+
+- name: Configure localhost Nagios object
+  ansible.builtin.template:
+    src: etc/nagios/localhost.cfg.j2
+    dest: "{{ anro_nagios_objects_path }}/localhost.cfg"
+    owner: "{{ _anro_nagios_cfg.nagios_user }}"
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0640"
+  notify: Validate Nagios configuration
+
+- name: Install Nagios command helper
+  ansible.builtin.copy:
+    src: nagios-cmd
+    dest: /usr/local/bin/nagios-cmd
+    owner: root
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0755"
+  when: anro_nagios_install_helper | bool
+
+- name: Install Twilio SMS notification helper
+  ansible.builtin.template:
+    src: etc/nagios/libexec/send_twilio_sms.sh.j2
+    dest: "{{ anro_nagios_libexec_path }}/send_twilio_sms.sh"
+    owner: root
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0750"
+  when:
+    - anro_nagios_twilio_number | length > 0
+    - anro_nagios_twilio_account_sid | length > 0
+    - anro_nagios_twilio_auth_token | length > 0
+  no_log: true
+  notify: Validate Nagios configuration
