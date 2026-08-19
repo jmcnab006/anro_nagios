@@ -45,9 +45,16 @@
   no_log: true
   notify: Validate Apache configuration
 
-- name: Remove Apache LDAP authentication configuration when disabled
+- name: Remove enabled Apache LDAP authentication configuration when disabled
   ansible.builtin.file:
     path: /etc/apache2/conf-enabled/ldap.conf
+    state: absent
+  when: not (anro_nagios_use_ldap | bool)
+  notify: Validate Apache configuration
+
+- name: Remove stored Apache LDAP credentials when disabled
+  ansible.builtin.file:
+    path: /etc/apache2/conf-available/ldap.conf
     state: absent
   when: not (anro_nagios_use_ldap | bool)
   notify: Validate Apache configuration

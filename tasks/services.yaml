@@ -1,16 +1,16 @@
 ---
-- name: Ensure Postfix is enabled and running
+- name: Ensure Postfix has requested state
   ansible.builtin.service:
     name: postfix
-    enabled: true
-    state: started
-  when: anro_nagios_install | bool
+    enabled: "{{ anro_nagios_postfix_service_enabled }}"
+    state: "{{ anro_nagios_postfix_service_state }}"
+  when: anro_nagios_postfix_enabled | bool
 
-- name: Ensure Apache is enabled and running
+- name: Ensure Apache has requested state
   ansible.builtin.service:
     name: apache2
-    enabled: true
-    state: started
+    enabled: "{{ anro_nagios_apache_service_enabled }}"
+    state: "{{ anro_nagios_apache_service_state }}"
   when: anro_nagios_configure | bool
 
 - name: Ensure Nagios service has requested state

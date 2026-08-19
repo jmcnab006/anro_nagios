@@ -1,0 +1,14 @@
+---
+- name: Destroy container instances
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: DESTROY | Remove containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+        force_kill: true
+      loop: "{{ groups['server'] | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+      failed_when: false

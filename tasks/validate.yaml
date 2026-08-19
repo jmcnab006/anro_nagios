@@ -1,14 +1,32 @@
 ---
+- name: Validate supported operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('20.04', '>=')
+    fail_msg: >-
+      anro_nagios v2 supports Ubuntu 20.04 and newer because it installs Nagios
+      from Ubuntu apt repositories.
+
 - name: Validate required Nagios role settings
   ansible.builtin.assert:
     that:
       - anro_nagios_domain | length > 0
+      - anro_nagios_server_name | length > 0
       - anro_nagios_service | length > 0
       - anro_nagios_cfg_path | length > 0
       - anro_nagios_objects_path | length > 0
       - anro_nagios_binary | length > 0
       - anro_nagios_cfg_file | length > 0
       - anro_nagios_package_state in ['present', 'latest']
+      - anro_nagios_service_state in ['started', 'stopped']
+      - anro_nagios_apache_service_state in ['started', 'stopped']
+      - anro_nagios_postfix_service_state in ['started', 'stopped']
+      - anro_nagios_add_packages | intersect(anro_nagios_remove_packages) | length == 0
+      - anro_nagios_packages | intersect(anro_nagios_remove_packages) | length == 0
+      - >-
+        not (anro_nagios_postfix_enabled | bool) or
+        anro_nagios_postfix_packages | intersect(anro_nagios_remove_packages) | length == 0
     fail_msg: "Required anro_nagios configuration is invalid."
 
 - name: Validate configured Nagios web users
@@ -24,6 +42,32 @@
     label: "{{ item.name | default('undefined') }}"
   no_log: true
 
+- name: Validate unique Nagios web user names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_users | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_users | length
+    fail_msg: "anro_nagios_users contains duplicate user names."
+  no_log: true
+
+- name: Validate Apache authentication providers
+  ansible.builtin.assert:
+    that:
+      - anro_nagios_basic_auth_provider | length > 0
+      - >-
+        anro_nagios_basic_auth_provider | unique | list | length ==
+        anro_nagios_basic_auth_provider | length
+      - >-
+        not (anro_nagios_use_ldap | bool) or
+        anro_nagios_ldap_provider in anro_nagios_basic_auth_provider
+      - >-
+        (anro_nagios_use_ldap | bool) or
+        anro_nagios_ldap_provider not in anro_nagios_basic_auth_provider
+    fail_msg: >-
+      Authentication providers must match the LDAP setting. Include
+      anro_nagios_ldap_provider when LDAP is enabled and remove it when LDAP is disabled.
+
 - name: Validate LDAP authentication settings
   ansible.builtin.assert:
     that:
@@ -35,3 +79,203 @@
       LDAP authentication requires URL, bind DN, bind password, and provider settings.
   when: anro_nagios_use_ldap | bool
   no_log: true
+
+- name: Validate custom Nagios commands
+  ansible.builtin.assert:
+    that:
+      - item.command_name is defined
+      - item.command_name | length > 0
+      - item.command_line is defined
+      - item.command_line | length > 0
+    fail_msg: "Every anro_nagios_commands entry requires command_name and command_line."
+  loop: "{{ anro_nagios_commands }}"
+  loop_control:
+    label: "{{ item.command_name | default('undefined') }}"
+
+- name: Validate unique custom Nagios command names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_commands | map(attribute='command_name') | list | unique | list | length ==
+        anro_nagios_commands | length
+    fail_msg: "anro_nagios_commands contains duplicate command_name values."
+
+- name: Validate custom Nagios contacts
+  ansible.builtin.assert:
+    that:
+      - item.contact_name is defined
+      - item.contact_name | length > 0
+    fail_msg: "Every anro_nagios_contacts entry requires contact_name."
+  loop: "{{ anro_nagios_contacts }}"
+  loop_control:
+    label: "{{ item.contact_name | default('undefined') }}"
+
+- name: Validate unique custom Nagios contact names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_contacts | map(attribute='contact_name') | list | unique | list | length ==
+        anro_nagios_contacts | length
+    fail_msg: "anro_nagios_contacts contains duplicate contact_name values."
+
+- name: Validate custom Nagios contact groups
+  ansible.builtin.assert:
+    that:
+      - item.contactgroup_name is defined
+      - item.contactgroup_name | length > 0
+    fail_msg: "Every anro_nagios_contactgroups entry requires contactgroup_name."
+  loop: "{{ anro_nagios_contactgroups }}"
+  loop_control:
+    label: "{{ item.contactgroup_name | default('undefined') }}"
+
+- name: Validate unique custom Nagios contact group names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_contactgroups | map(attribute='contactgroup_name') | list | unique | list | length ==
+        anro_nagios_contactgroups | length
+    fail_msg: "anro_nagios_contactgroups contains duplicate contactgroup_name values."
+
+- name: Validate host template definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+    fail_msg: "Every anro_nagios_templates_host entry requires name."
+  loop: "{{ anro_nagios_templates_host }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Validate unique host template names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_templates_host | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_templates_host | length
+    fail_msg: "anro_nagios_templates_host contains duplicate names."
+
+- name: Validate contact template definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+    fail_msg: "Every anro_nagios_templates_contact entry requires name."
+  loop: "{{ anro_nagios_templates_contact }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Validate unique contact template names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_templates_contact | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_templates_contact | length
+    fail_msg: "anro_nagios_templates_contact contains duplicate names."
+
+- name: Validate contact group template definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+    fail_msg: "Every anro_nagios_templates_contactgroup entry requires name."
+  loop: "{{ anro_nagios_templates_contactgroup }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Validate unique contact group template names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_templates_contactgroup | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_templates_contactgroup | length
+    fail_msg: "anro_nagios_templates_contactgroup contains duplicate names."
+
+- name: Validate service template definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+    fail_msg: "Every anro_nagios_templates_service entry requires name."
+  loop: "{{ anro_nagios_templates_service }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Validate unique service template names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_templates_service | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_templates_service | length
+    fail_msg: "anro_nagios_templates_service contains duplicate names."
+
+- name: Validate time period definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.timeperiod_name is defined
+      - item.timeperiod_name | length > 0
+    fail_msg: >-
+      Every anro_nagios_templates_timeperiod entry requires name and timeperiod_name.
+  loop: "{{ anro_nagios_templates_timeperiod }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Validate unique time period names
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_templates_timeperiod | map(attribute='name') | list | unique | list | length ==
+        anro_nagios_templates_timeperiod | length
+      - >-
+        anro_nagios_templates_timeperiod | map(attribute='timeperiod_name') | list |
+        unique | list | length == anro_nagios_templates_timeperiod | length
+    fail_msg: >-
+      anro_nagios_templates_timeperiod contains duplicate names or timeperiod_name values.
+
+- name: Validate localhost object settings
+  ansible.builtin.assert:
+    that:
+      - anro_nagios_localhost_host_name | length > 0
+      - anro_nagios_localhost_alias | length > 0
+      - anro_nagios_localhost_address | string | length > 0
+      - anro_nagios_localhost_hostgroup | length > 0
+    fail_msg: "Localhost monitoring requires host name, alias, address, and hostgroup."
+  when: anro_nagios_localhost_enabled | bool
+
+- name: Validate localhost service definitions
+  ansible.builtin.assert:
+    that:
+      - item.service_description is defined
+      - item.service_description | length > 0
+      - >-
+        (item.check_command is defined and item.check_command | length > 0) or
+        (item.auto_load | default(false) | bool)
+    fail_msg: >-
+      Every anro_nagios_local_services entry requires service_description and
+      either check_command or auto_load: true.
+  loop: "{{ anro_nagios_local_services }}"
+  loop_control:
+    label: "{{ item.service_description | default('undefined') }}"
+  when: anro_nagios_localhost_enabled | bool
+
+- name: Validate unique localhost service descriptions
+  ansible.builtin.assert:
+    that:
+      - >-
+        anro_nagios_local_services | map(attribute='service_description') | list |
+        unique | list | length == anro_nagios_local_services | length
+    fail_msg: "anro_nagios_local_services contains duplicate service descriptions."
+  when: anro_nagios_localhost_enabled | bool
+
+- name: Validate localhost load threshold multipliers
+  ansible.builtin.assert:
+    that:
+      - anro_nagios_local_load_warning_multiplier | float > 0
+      - >-
+        anro_nagios_local_load_critical_multiplier | float >
+        anro_nagios_local_load_warning_multiplier | float
+    fail_msg: >-
+      Local load thresholds require a positive warning multiplier and a larger
+      critical multiplier.
+  when: anro_nagios_localhost_enabled | bool

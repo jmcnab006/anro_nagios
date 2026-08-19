@@ -1,0 +1,28 @@
+---
+ansible:
+  cfg:
+    defaults:
+      deprecation_warnings: false
+      callbacks_enabled: profile_tasks
+      pipelining: true
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/..
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/inventory/
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ${MOLECULE_SCENARIO_DIRECTORY}/requirements.yml
+
+scenario:
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

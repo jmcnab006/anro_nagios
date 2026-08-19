@@ -1,7 +1,7 @@
 ---
 argument_specs:
   main:
-    short_description: Configure and manage Nagios
+    short_description: Configure and manage Nagios Core on Ubuntu
     options:
       anro_nagios_enabled:
         type: bool
@@ -30,9 +30,39 @@ argument_specs:
         type: list
         elements: str
 
+      anro_nagios_postfix_enabled:
+        type: bool
+        default: true
+
+      anro_nagios_postfix_packages:
+        type: list
+        elements: str
+
+      anro_nagios_postfix_service_enabled:
+        type: bool
+        default: true
+
+      anro_nagios_postfix_service_state:
+        type: str
+        default: started
+        choices:
+          - started
+          - stopped
+
+      anro_nagios_postfix_relayhost:
+        type: str
+        default: ""
+
+      anro_nagios_postfix_inet_interfaces:
+        type: str
+        default: loopback-only
+
       anro_nagios_domain:
         type: str
         default: example.com
+
+      anro_nagios_server_name:
+        type: str
 
       anro_nagios_service:
         type: str
@@ -48,12 +78,25 @@ argument_specs:
         choices:
           - started
           - stopped
-          - restarted
-          - reloaded
 
-      anro_nagios_force:
+      anro_nagios_apache_service_enabled:
         type: bool
-        default: false
+        default: true
+
+      anro_nagios_apache_service_state:
+        type: str
+        default: started
+        choices:
+          - started
+          - stopped
+
+      anro_nagios_create_compat_symlink:
+        type: bool
+        default: true
+
+      anro_nagios_compat_symlink_path:
+        type: path
+        default: /etc/nagios
 
       anro_nagios_users:
         type: list
@@ -74,7 +117,6 @@ argument_specs:
 
       anro_nagios_objects_path:
         type: path
-        default: "{{ anro_nagios_cfg_path }}/objects"
 
       anro_nagios_binary:
         type: path
@@ -82,7 +124,6 @@ argument_specs:
 
       anro_nagios_cfg_file:
         type: path
-        default: "{{ anro_nagios_cfg_path }}/nagios.cfg"
 
       anro_nagios_libexec_path:
         type: path
@@ -90,7 +131,14 @@ argument_specs:
 
       anro_nagios_cfg_backup_path:
         type: path
-        default: "{{ anro_nagios_cfg_path }}/backup"
+
+      anro_nagios_packaged_objects_remove:
+        type: list
+        elements: str
+        default:
+          - printer.cfg
+          - switch.cfg
+          - windows.cfg
 
       anro_nagios_add_packages:
         type: list
@@ -122,6 +170,8 @@ argument_specs:
         type: path
         default: /etc/ssl/certs/ssl-cert-snakeoil.pem
 
+      # Deprecated compatibility input. The certificate chain should be included
+      # in anro_nagios_certificate_file for modern Apache releases.
       anro_nagios_certificate_chain_file:
         type: path
         default: /etc/ssl/certs/ssl-cert-snakeoil.pem
@@ -173,6 +223,13 @@ argument_specs:
         type: list
         elements: dict
         default: []
+        options:
+          command_name:
+            type: str
+            required: true
+          command_line:
+            type: str
+            required: true
 
       anro_nagios_contacts:
         type: list
@@ -208,6 +265,51 @@ argument_specs:
         type: list
         elements: dict
         default: []
+
+      anro_nagios_localhost_enabled:
+        type: bool
+        default: true
+
+      anro_nagios_localhost_host_name:
+        type: str
+
+      anro_nagios_localhost_alias:
+        type: str
+
+      anro_nagios_localhost_address:
+        type: str
+        default: 127.0.0.1
+
+      anro_nagios_localhost_hostgroup:
+        type: str
+        default: monitor-servers
+
+      anro_nagios_local_load_warning_multiplier:
+        type: float
+        default: 1.0
+
+      anro_nagios_local_load_critical_multiplier:
+        type: float
+        default: 1.5
+
+      anro_nagios_local_services:
+        type: list
+        elements: dict
+        options:
+          service_description:
+            type: str
+            required: true
+          check_command:
+            type: str
+          auto_load:
+            type: bool
+            default: false
+          use:
+            type: str
+            default: local-service
+          options:
+            type: dict
+            default: {}
 
       anro_nagios_twilio_number:
         type: str

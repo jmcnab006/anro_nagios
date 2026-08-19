@@ -1,0 +1,19 @@
+---
+ansible_connection: community.docker.docker
+
+container_command: /lib/systemd/systemd # noqa: var-naming[no-role-prefix]
+container_privileged: true # noqa: var-naming[no-role-prefix]
+container_log_driver: json-file # noqa: var-naming[no-role-prefix]
+container_volumes: # noqa: var-naming[no-role-prefix]
+  - /sys/fs/cgroup:/sys/fs/cgroup:rw
+container_tmpfs: # noqa: var-naming[no-role-prefix]
+  - /run
+  - /tmp
+
+anro_nagios_domain: molecule.test
+anro_nagios_install_helper: false
+anro_nagios_postfix_enabled: false
+anro_nagios_apache_service_state: stopped
+anro_nagios_users:
+  - name: molecule
+    password: molecule-test-password

@@ -57,7 +57,7 @@ define contact {
       _anro_nagios_templates_contactgroup | length > 0 %}
 # BEGIN CONTACT GROUP TEMPLATES
 {% for contactgroup in _anro_nagios_templates_contactgroup %}
-define contact {
+define contactgroup {
 
 {% for key, value in contactgroup.items() %}
     {{ "%-30s"|format(key) }} {{ value }}

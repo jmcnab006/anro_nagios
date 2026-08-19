@@ -1,0 +1,23 @@
+---
+- name: Create container instances
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: CREATE | Create containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        hostname: "{{ item }}"
+        image: "{{ hostvars[item]['container_image'] }}"
+        command: "{{ hostvars[item]['container_command'] | default('sleep 1d') }}"
+        privileged: "{{ hostvars[item]['container_privileged'] | default(false) }}"
+        log_driver: "{{ hostvars[item]['container_log_driver'] | default('json-file') }}"
+        volumes: "{{ hostvars[item]['container_volumes'] | default(omit) }}"
+        tmpfs: "{{ hostvars[item]['container_tmpfs'] | default(omit) }}"
+        cgroupns_mode: host
+        state: started
+        exposed_ports: "{{ hostvars[item]['container_exposed_ports'] | default(omit) }}"
+        published_ports: "{{ hostvars[item]['container_published_ports'] | default(omit) }}"
+      register: _create_results
+      loop: "{{ groups['server'] }}"
+      loop_control:
+        label: "{{ item }}"

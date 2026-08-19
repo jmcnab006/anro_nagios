@@ -6,6 +6,12 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Install Postfix notification packages
+  ansible.builtin.apt:
+    name: "{{ anro_nagios_postfix_packages }}"
+    state: "{{ anro_nagios_package_state }}"
+  when: anro_nagios_postfix_enabled | bool
+
 - name: Install additional Nagios packages
   ansible.builtin.apt:
     name: "{{ anro_nagios_add_packages }}"

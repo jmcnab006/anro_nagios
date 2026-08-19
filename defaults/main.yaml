@@ -1,16 +1,14 @@
+---
 anro_nagios_enabled: true
 anro_nagios_install: true
 anro_nagios_configure: true
 anro_nagios_install_helper: true
 
-
 anro_nagios_package_state: present
 
-# Base packages required by the role. Override only when adapting the role to a
-# compatible distribution/package set.
+# Base packages required for Nagios and its Apache web interface. Postfix/mail
+# packages are managed separately so local mail delivery can be disabled.
 anro_nagios_packages:
-  - postfix
-  - mailutils
   - apache2
   - libapache2-mod-php
   - monitoring-plugins-contrib
@@ -33,74 +31,87 @@ anro_nagios_packages:
   - libtext-glob-perl
   - libdbd-mysql-perl
 
-# Set our domain for configuring the webserver and postfix
-anro_nagios_domain: "example.com"
+# Local Postfix support is enabled by default for Nagios email notifications.
+# Disable it when another MTA or notification transport is managed externally.
+anro_nagios_postfix_enabled: true
+anro_nagios_postfix_packages:
+  - postfix
+  - mailutils
+anro_nagios_postfix_service_enabled: true
+anro_nagios_postfix_service_state: started
+anro_nagios_postfix_relayhost: ""
+anro_nagios_postfix_inet_interfaces: loopback-only
 
-# Set our nagios service name default: nagios4.service
-# there should very few reasons to change this
-anro_nagios_service: 'nagios4.service'
+# Domain and canonical server name used by Apache and Postfix. Supplying an
+# already-qualified inventory_hostname does not append the domain a second time.
+anro_nagios_domain: example.com
+anro_nagios_server_name: >-
+  {{ inventory_hostname if '.' in inventory_hostname else inventory_hostname ~ '.' ~ anro_nagios_domain }}
+
+# Service lifecycle settings. Restart/reload actions are handler-owned so the
+# requested state remains idempotent across repeated role executions.
+anro_nagios_service: nagios4.service
 anro_nagios_service_enabled: true
 anro_nagios_service_state: started
+anro_nagios_apache_service_enabled: true
+anro_nagios_apache_service_state: started
 
-# Set our default overwrite value
-anro_nagios_force: false
+# Create /etc/nagios as a compatibility symlink when the package configuration
+# lives elsewhere. The role refuses to replace a real directory at this path.
+anro_nagios_create_compat_symlink: true
+anro_nagios_compat_symlink_path: /etc/nagios
 
-# What users to add to the htpasswd file for authentication name: password:
+# Web users written to the role-managed htpasswd file.
 anro_nagios_users: []
 
-# most of these should not be changed
-anro_nagios_cfg_path: '/etc/nagios4'
+# Nagios package paths. These normally should not need to change on Ubuntu.
+anro_nagios_cfg_path: /etc/nagios4
 anro_nagios_objects_path: "{{ anro_nagios_cfg_path }}/objects"
-anro_nagios_binary: '/usr/sbin/nagios4'
+anro_nagios_binary: /usr/sbin/nagios4
 anro_nagios_cfg_file: "{{ anro_nagios_cfg_path }}/nagios.cfg"
-anro_nagios_libexec_path: "/usr/lib/nagios/plugins"
+anro_nagios_libexec_path: /usr/lib/nagios/plugins
 anro_nagios_cfg_backup_path: "{{ anro_nagios_cfg_path }}/backup"
+anro_nagios_packaged_objects_remove:
+  - printer.cfg
+  - switch.cfg
+  - windows.cfg
 
-# define a list here if we want addition packages installed on the system
+# Additional package customization.
 anro_nagios_add_packages: []
-
-# define a list here if we want certain packages explicitly removed from the system
 anro_nagios_remove_packages: []
 
-# default auth realm as defined in apache configuration
-anro_nagios_auth_realm: "monitoring"
-
+# Apache authentication settings.
+anro_nagios_auth_realm: monitoring
 anro_nagios_apache_server_admin: root@localhost
-
-# Apache htpassword users location
 anro_nagios_htpasswd_file: /etc/nagios4/htpassword.users
 
-# define our certificate paths.
+# TLS certificate paths. The certificate file should contain the complete
+# certificate chain when intermediates are required by the deployment.
 anro_nagios_certificate_key_file: /etc/ssl/private/ssl-cert-snakeoil.key
 anro_nagios_certificate_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
+# Deprecated compatibility variable. Apache 2.4 uses the chain supplied in
+# anro_nagios_certificate_file; this variable is no longer rendered.
 anro_nagios_certificate_chain_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
 
-# define our apache2 basic auth provider which should by default be file
 anro_nagios_basic_auth_provider:
   - file
 
-# to use or not to use ldap configuration
+# LDAP authentication is optional. When disabled, LDAP configuration containing
+# credentials is removed from disk.
 anro_nagios_use_ldap: false
-anro_nagios_ldap_provider: "nagios-ldap"
-
-# cert path for ldap authentication certificate
-
+anro_nagios_ldap_provider: nagios-ldap
 anro_nagios_certificate_auth_file: /etc/ssl/certs/ssl-cert-snakeoil.pem
-# basic ldap authentication parameters
 anro_nagios_auth_ldap_bind_dn: ""
 anro_nagios_auth_ldap_bind_pw: ""
 anro_nagios_auth_ldap_url: ""
 
-# settings to override in the default cgi.cfg
+# Settings merged into the role defaults for the packaged Nagios files.
 anro_nagios_cgi_cfg: {}
-
-# settings to override in the nagios.cfg
 anro_nagios_cfg: {}
-
-# settings to override in the resource.cfg
 anro_nagios_resource_cfg: {}
 
-# custom definitions that should be added to the defaults
+# Standard Nagios definitions shared through playbook/group variables. Entries
+# with the same logical name replace the matching built-in role definition.
 anro_nagios_commands: []
 anro_nagios_contacts: []
 anro_nagios_contactgroups: []
@@ -110,8 +121,32 @@ anro_nagios_templates_contactgroup: []
 anro_nagios_templates_service: []
 anro_nagios_templates_timeperiod: []
 
-# if sms messaging is enabled with twilo these should be populated
+# Baseline localhost monitoring. The entire service list is overridable so sites
+# can remove checks that do not apply or add standard local checks consistently.
+anro_nagios_localhost_enabled: true
+anro_nagios_localhost_host_name: "{{ inventory_hostname }}"
+anro_nagios_localhost_alias: "{{ inventory_hostname }}"
+anro_nagios_localhost_address: 127.0.0.1
+anro_nagios_localhost_hostgroup: monitor-servers
+anro_nagios_local_load_warning_multiplier: 1.0
+anro_nagios_local_load_critical_multiplier: 1.5
+anro_nagios_local_services:
+  - service_description: PING
+    check_command: check_ping!100.0,20%!500.0,60%
+  - service_description: Root Partition
+    check_command: check_local_disk!20%!10%!/
+  - service_description: Current Users
+    check_command: check_local_users!20!50
+  - service_description: Total Processes
+    check_command: check_local_procs!4000!8000!RSZDT
+  - service_description: Current Load
+    auto_load: true
+  - service_description: SSH
+    check_command: check_ssh
+  - service_description: HTTP
+    check_command: check_http
 
+# Optional Twilio SMS notification helper credentials.
 anro_nagios_twilio_number: ""
 anro_nagios_twilio_account_sid: ""
 anro_nagios_twilio_auth_token: ""

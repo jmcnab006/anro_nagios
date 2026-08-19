@@ -1,528 +1,310 @@
+# anro_nagios
 
-# ANsible ROle nagios
+`anro_nagios` installs Nagios Core from the Ubuntu apt repositories and provides a reusable baseline configuration for Ubuntu 20.04 and newer.
 
-`anro_nagios` is an Ansible role for building and managing persistent Linux `nagios` monitoring configurations on Debian and Ubuntu systems.
+The role deliberately separates configuration ownership:
 
----
+- Ansible owns the Nagios platform, Apache integration, standard shared objects, and baseline localhost checks.
+- Administrators own site-specific objects below dedicated custom directories.
+- `nagios-cmd` provides a safe interface for creating and changing administrator-owned objects while protecting Ansible-managed aggregate files.
 
-Ansible role for installing and managing Nagios Core on Ubuntu 20.04 and newer.
+## Features
 
-The role installs Nagios from the Ubuntu package repositories, configures a clean separation between Ansible-managed configuration and administrator-managed custom configuration, and provides the `nagios-cmd` utility for day-to-day management of hosts, services, commands, templates, contacts, and time periods.
+- Installs Ubuntu `nagios4` packages and monitoring plugins with `ansible.builtin.apt`.
+- Configures Nagios, Apache, optional Postfix, file authentication, and optional LDAP authentication.
+- Validates Apache and Nagios configuration before service reloads.
+- Supports standard commands, contacts, contact groups, templates, and time periods through role variables.
+- Allows playbook-provided standard objects to override built-in objects with the same logical name.
+- Provides configurable baseline localhost monitoring.
+- Installs the dependency-free `nagios-cmd` helper for administrator-managed configuration.
+- Preserves administrator-managed files across subsequent Ansible converges.
 
----
-
-# Features
-
-* Installs Nagios Core using Ubuntu apt packages
-* Supports Ubuntu 20.04+
-* Uses native `nagios4` packages
-* Creates a clean custom configuration hierarchy
-* Separates Ansible-managed defaults from administrator-managed configuration
-* Includes Nagios validation before service reload
-* Provides `nagios-cmd` CLI for configuration management
-* Supports bash tab completion
-* Supports reusable service definition templates
-
----
-
-# Installation
-
-Example playbook:
+## Basic usage
 
 ```yaml
-- hosts: nagios
+---
+- name: Configure Nagios
+  hosts: nagios
   become: true
 
   roles:
     - role: anro_nagios
+      vars:
+        anro_nagios_domain: example.com
+        anro_nagios_users:
+          - name: nagiosadmin
+            password: "{{ vault_nagios_password }}"
 ```
 
----
+Passwords and LDAP credentials should be supplied from Ansible Vault or another secret-management mechanism.
 
-# Directory Layout
+## Configuration ownership
 
-The role manages the base Nagios installation and creates the following directory structure:
+The Ubuntu package configuration normally lives at `/etc/nagios4`. By default the role creates `/etc/nagios` as a compatibility symlink. The role refuses to replace `/etc/nagios` when it is an existing real directory.
+
+### Ansible-managed files
+
+These aggregate files are authoritative and should be changed through role variables rather than edited manually:
 
 ```text
-/etc/nagios/
-├── nagios.cfg
-├── objects/
-│   ├── commands.cfg
-│   ├── contacts.cfg
-│   ├── templates.cfg
-│   ├── timeperiods.cfg
-│   │
-│   ├── commands/
-│   ├── contacts/
-│   ├── templates/
-│   ├── timeperiods/
-│   │
-│   └── hosts/
-│       ├── default/
-│       └── <hostgroup>/
-│           ├── hostgroup.cfg
-│           ├── host1.cfg
-│           ├── host2.cfg
-│           └── host3.cfg
-│
-└── servicedefs/
-    ├── ssh.tpl
-    ├── http.tpl
-    ├── https.tpl
-    └── custom.tpl
+/etc/nagios4/nagios.cfg
+/etc/nagios4/cgi.cfg
+/etc/nagios4/resource.cfg
+/etc/nagios4/objects/commands.cfg
+/etc/nagios4/objects/contacts.cfg
+/etc/nagios4/objects/templates.cfg
+/etc/nagios4/objects/timeperiods.cfg
+/etc/nagios4/objects/localhost.cfg
 ```
 
----
+### Administrator-managed directories
 
-# Configuration Ownership
-
-## Ansible Managed
-
-The following files are owned by Ansible and should never be modified manually:
+The role creates but does not purge or synchronize the contents of these directories:
 
 ```text
-/etc/nagios/objects/commands.cfg
-/etc/nagios/objects/contacts.cfg
-/etc/nagios/objects/templates.cfg
-/etc/nagios/objects/timeperiods.cfg
-/etc/nagios/nagios.cfg
+/etc/nagios4/objects/commands/
+/etc/nagios4/objects/contacts/
+/etc/nagios4/objects/contactgroups/
+/etc/nagios4/objects/hosts/
+/etc/nagios4/objects/servicegroups/
+/etc/nagios4/objects/templates/
+/etc/nagios4/objects/timeperiods/
+/etc/nagios4/servicedefs/
 ```
 
-Changes to these files should only occur through role updates.
+Custom directories are `nagios:nagios` mode `0750`. Files written by `nagios-cmd` are normalized to `nagios:nagios` mode `0640`.
 
-## Administrator Managed
+Ubuntu sample object files removed from the aggregate `objects/` directory are controlled by `anro_nagios_packaged_objects_remove`. Override that list if a deployment intentionally retains one of those packaged filenames.
 
-The following directories are managed through `nagios-cmd`:
+Run mutating `nagios-cmd` operations as root or as the Nagios service account so the helper can maintain that ownership policy.
+
+## Standard shared configuration through variables
+
+Playbook/group variables can define objects that should remain consistent across multiple Nagios servers.
+
+```yaml
+anro_nagios_commands:
+  - command_name: check_api_health
+    command_line: >-
+      /usr/lib/nagios/plugins/check_http -H $HOSTADDRESS$ -u /health
+
+anro_nagios_contacts:
+  - contact_name: operations
+    use: generic-contact
+    alias: Operations
+    email: operations@example.com
+
+anro_nagios_contactgroups:
+  - contactgroup_name: oncall
+    alias: On-call Operations
+    members: operations
+
+anro_nagios_templates_service:
+  - name: standard-http-service
+    use: generic-service
+    check_interval: 5
+    retry_interval: 1
+    max_check_attempts: 3
+    register: 0
+
+anro_nagios_templates_timeperiod:
+  - name: business-hours
+    timeperiod_name: business-hours
+    alias: Business Hours
+    monday: 08:00-17:00
+    tuesday: 08:00-17:00
+    wednesday: 08:00-17:00
+    thursday: 08:00-17:00
+    friday: 08:00-17:00
+```
+
+When a playbook-provided command, contact, contact group, or template has the same logical name as a built-in role definition, the playbook definition replaces the built-in definition. Duplicate names within the user-provided list are rejected during role validation.
+
+## Baseline localhost monitoring
+
+The role creates a localhost host and hostgroup plus a baseline set of service checks. The service list is configurable:
+
+```yaml
+anro_nagios_local_services:
+  - service_description: PING
+    check_command: check_ping!100.0,20%!500.0,60%
+  - service_description: Root Partition
+    check_command: check_local_disk!20%!10%!/
+  - service_description: Current Load
+    auto_load: true
+  - service_description: SSH
+    check_command: check_ssh
+```
+
+Additional Nagios service directives can be supplied with `options`:
+
+```yaml
+anro_nagios_local_services:
+  - service_description: HTTPS
+    check_command: check_http!-S
+    options:
+      check_interval: 2
+      retry_interval: 1
+```
+
+Automatic load thresholds are based on vCPU count and can be tuned with:
+
+```yaml
+anro_nagios_local_load_warning_multiplier: 1.0
+anro_nagios_local_load_critical_multiplier: 1.5
+```
+
+Set `anro_nagios_localhost_enabled: false` to omit the role-managed localhost object.
+
+## Apache and authentication
+
+File authentication is enabled by default through `anro_nagios_basic_auth_provider` and users in `anro_nagios_users`.
+
+LDAP can be enabled with:
+
+```yaml
+anro_nagios_use_ldap: true
+anro_nagios_ldap_provider: nagios-ldap
+anro_nagios_basic_auth_provider:
+  - file
+  - nagios-ldap
+anro_nagios_auth_ldap_url: ldaps://ldap.example.com/ou=people,dc=example,dc=com?uid?sub
+anro_nagios_auth_ldap_bind_dn: cn=nagios,ou=service,dc=example,dc=com
+anro_nagios_auth_ldap_bind_pw: "{{ vault_nagios_ldap_password }}"
+```
+
+When LDAP is disabled, the role removes the generated Apache LDAP configuration so bind credentials are not left on disk.
+
+Apache service lifecycle is configurable independently from Nagios:
+
+```yaml
+anro_nagios_apache_service_enabled: true
+anro_nagios_apache_service_state: started
+```
+
+Only durable service states (`started` and `stopped`) are accepted. Configuration-triggered reloads are handler-owned so repeated role executions remain idempotent.
+
+The TLS certificate file should include any required intermediate certificates. `anro_nagios_certificate_chain_file` is retained only for v2 compatibility and is no longer rendered into Apache configuration.
+
+## Postfix
+
+Local Postfix support is enabled by default for email notifications and can be disabled completely:
+
+```yaml
+anro_nagios_postfix_enabled: false
+```
+
+Postfix settings exposed by the role include:
+
+```yaml
+anro_nagios_postfix_service_enabled: true
+anro_nagios_postfix_service_state: started
+anro_nagios_postfix_relayhost: "[smtp.example.com]:25"
+anro_nagios_postfix_inet_interfaces: loopback-only
+```
+
+The default listener is loopback-only because this role needs an outbound mail transport for Nagios notifications, not a network-accessible SMTP server.
+
+## `nagios-cmd`
+
+`nagios-cmd` only modifies files below the explicit administrator-managed roots listed above. It refuses to modify Ansible-owned aggregate files such as `objects/commands.cfg`.
+
+Every mutating operation writes atomically, validates the complete Nagios configuration, and restores the previous file content and metadata when validation fails. A successful write does not automatically reload Nagios; reload explicitly after completing a group of changes:
+
+```bash
+sudo nagios-cmd config check
+sudo nagios-cmd config reload
+```
+
+### Hosts and hostgroups
+
+```bash
+sudo nagios-cmd host add web01 10.10.10.10
+sudo nagios-cmd host add web02 10.10.10.11 --hostgroup linux
+sudo nagios-cmd host show
+sudo nagios-cmd host show web01
+sudo nagios-cmd host set web01 10.10.10.20 --force
+sudo nagios-cmd host remove web01 --force
+
+sudo nagios-cmd hostgroup add linux
+sudo nagios-cmd hostgroup show
+```
+
+Hosts without an explicit hostgroup are stored under `objects/hosts/default/`.
+
+### Commands, contacts, contact groups, service groups, templates, and time periods
+
+```bash
+sudo nagios-cmd command add check_custom \
+  --options 'command_line=/usr/lib/nagios/plugins/check_dummy 0 custom-ok'
+
+sudo nagios-cmd contact add operator --options email=operator@example.com
+sudo nagios-cmd contactgroup add operators --members operator
+sudo nagios-cmd servicegroup add applications
+sudo nagios-cmd template add generic-linux --options register=0,use=generic-host
+sudo nagios-cmd timeperiod add maintenance --options sunday=01:00-03:00
+```
+
+### Reusable service definition files
+
+Administrator-managed service definition templates live in `/etc/nagios4/servicedefs/*.tpl`. They can contain `{{ host_name }}` and other placeholders populated from the target host object.
+
+Example `/etc/nagios4/servicedefs/ssh.tpl`:
 
 ```text
-/etc/nagios/objects/commands/
-/etc/nagios/objects/contacts/
-/etc/nagios/objects/templates/
-/etc/nagios/objects/timeperiods/
-/etc/nagios/objects/hosts/
-/etc/nagios/servicedefs/
+define service {
+    use                     local-service
+    host_name               {{ host_name }}
+    service_description     SSH
+    check_command           check_ssh
+}
 ```
 
----
-
-# Host Layout
-
-Hosts are grouped by hostgroup.
-
-Example:
-
-```text
-hosts/
-├── default/
-│   ├── hostgroup.cfg
-│   └── web01.cfg
-│
-├── linux/
-│   ├── hostgroup.cfg
-│   ├── db01.cfg
-│   └── db02.cfg
-│
-└── network/
-    ├── hostgroup.cfg
-    ├── sw01.cfg
-    └── fw01.cfg
-```
-
-Hosts without a specified hostgroup are automatically placed into:
-
-```text
-hosts/default/
-```
-
----
-
-# Service Definitions
-
-Service definitions are reusable templates stored in:
-
-```text
-/etc/nagios/servicedefs/
-```
-
-Examples:
-
-```text
-ssh.tpl
-http.tpl
-https.tpl
-dns.tpl
-mysql.tpl
-```
-
-A service template contains one or more Nagios service definitions that can be applied to a host.
-
-Example:
+Apply the template to a custom host:
 
 ```bash
-nagios-cmd service add web01 -s ssh,http,https
+sudo nagios-cmd service add web01 --services ssh
 ```
 
-This command imports:
+## Role lifecycle controls
 
-```text
-/etc/nagios/servicedefs/ssh.tpl
-/etc/nagios/servicedefs/http.tpl
-/etc/nagios/servicedefs/https.tpl
+```yaml
+anro_nagios_enabled: true
+anro_nagios_install: true
+anro_nagios_configure: true
+anro_nagios_install_helper: true
+
+anro_nagios_service_enabled: true
+anro_nagios_service_state: started
+
+anro_nagios_create_compat_symlink: true
+anro_nagios_compat_symlink_path: /etc/nagios
 ```
 
-into the host configuration.
+`tasks/configure.yaml` is retained as a deprecated compatibility entry point for callers that imported it directly before v2. Apply the role normally instead. The compatibility task file is planned for removal in v3.
 
----
+## Testing
 
-# Validation
+The default Molecule scenario verifies the complete configured role, including:
 
-Every configuration write operation performs:
+- package and service state;
+- Apache and Nagios syntax validation;
+- authentication behavior;
+- standard object rendering and built-in command overrides;
+- custom-directory ownership and permissions;
+- `nagios-cmd` host, command, and service changes;
+- rollback of invalid `nagios-cmd` writes;
+- refusal to modify Ansible-managed aggregate objects; and
+- preservation of manual and `nagios-cmd` configuration after a role reconverge.
 
-1. Write temporary file
-2. Run Nagios validation
-3. Replace configuration
-4. Reload Nagios
-
-Equivalent command:
+The `minimal` scenario verifies optional functionality can be disabled, including the helper and local Postfix support.
 
 ```bash
-nagios4 -v /etc/nagios/nagios.cfg
+ansible-lint
+molecule test -s default
+molecule test -s minimal
 ```
 
-If validation fails, no configuration changes are committed.
+## License
 
----
-
-# nagios-cmd
-
-`nagios-cmd` is the administrative interface for custom Nagios configuration.
-
----
-
-# Host Management
-
-## Add Host
-
-```bash
-nagios-cmd host add web01 10.10.10.10
-```
-
-Creates:
-
-```text
-/etc/nagios/objects/hosts/default/web01.cfg
-```
-
----
-
-## Add Host To Hostgroup
-
-```bash
-nagios-cmd host add \
-    -g linux \
-    web01 \
-    10.10.10.10
-```
-
-Creates:
-
-```text
-/etc/nagios/objects/hosts/linux/web01.cfg
-```
-
----
-
-## Add Host With Options
-
-```bash
-nagios-cmd host add \
-    -g linux \
-    web01 \
-    10.10.10.10 \
-    -o use=generic-host,retry_interval=2,max_check_attempts=5
-```
-
----
-
-## List Hosts
-
-```bash
-nagios-cmd host show
-```
-
----
-
-## Show Host
-
-```bash
-nagios-cmd host show web01
-```
-
-Displays:
-
-```text
-Host: web01
-Address: 10.10.10.10
-Hostgroup: linux
-File: /etc/nagios/objects/hosts/linux/web01.cfg
-```
-
----
-
-# Hostgroup Management
-
-## Add Hostgroup
-
-```bash
-nagios-cmd hostgroup add linux
-```
-
-Creates:
-
-```text
-/etc/nagios/objects/hosts/linux/
-├── hostgroup.cfg
-```
-
----
-
-## Show Hostgroups
-
-```bash
-nagios-cmd hostgroup show
-```
-
----
-
-## Remove Hostgroup
-
-```bash
-nagios-cmd hostgroup remove linux
-```
-
-Only empty hostgroups may be removed.
-
----
-
-# Service Management
-
-## List Available Service Definitions
-
-```bash
-nagios-cmd service show
-```
-
-Example:
-
-```text
-ssh
-http
-https
-dns
-mysql
-```
-
----
-
-## Add Services To Host
-
-```bash
-nagios-cmd service add web01 -s ssh,http,https
-```
-
----
-
-## Remove Services
-
-```bash
-nagios-cmd service remove web01 -s ssh
-```
-
----
-
-# Command Management
-
-## Add Command
-
-```bash
-nagios-cmd command add check_custom \
-    -o command_line='/usr/lib/nagios/plugins/check_custom -H $HOSTADDRESS$'
-```
-
-Creates:
-
-```text
-/etc/nagios/objects/commands/check_custom.cfg
-```
-
----
-
-## Show Commands
-
-```bash
-nagios-cmd command show
-```
-
----
-
-## Show Specific Command
-
-```bash
-nagios-cmd command show check_custom
-```
-
----
-
-# Template Management
-
-## Add Template
-
-```bash
-nagios-cmd template add generic-linux \
-    -o use=generic-host,max_check_attempts=5
-```
-
-Creates:
-
-```text
-/etc/nagios/objects/templates/generic-linux.cfg
-```
-
----
-
-## Show Templates
-
-```bash
-nagios-cmd template show
-```
-
----
-
-# Contact Management
-
-## Add Contact
-
-```bash
-nagios-cmd contact add admin \
-    -o email=admin@example.com
-```
-
----
-
-## Show Contacts
-
-```bash
-nagios-cmd contact show
-```
-
----
-
-# Timeperiod Management
-
-## Add Timeperiod
-
-```bash
-nagios-cmd timeperiod add business-hours
-```
-
----
-
-## Show Timeperiods
-
-```bash
-nagios-cmd timeperiod show
-```
-
----
-
-# Configuration Commands
-
-## Validate Configuration
-
-```bash
-nagios-cmd config check
-```
-
-Equivalent:
-
-```bash
-nagios4 -v /etc/nagios/nagios.cfg
-```
-
----
-
-## Reload Nagios
-
-```bash
-nagios-cmd config reload
-```
-
-Equivalent:
-
-```bash
-systemctl reload nagios4
-```
-
----
-
-# Bash Completion
-
-The role installs shell completion.
-
-Examples:
-
-```bash
-nagios-cmd <TAB>
-
-host
-hostgroup
-service
-command
-template
-contact
-timeperiod
-config
-```
-
-```bash
-nagios-cmd host <TAB>
-
-add
-show
-remove
-```
-
-```bash
-nagios-cmd service add web01 -s <TAB>
-
-ssh
-http
-https
-dns
-mysql
-```
-
----
-
-# Future Features
-
-Planned enhancements:
-
-* Host removal
-* Hostgroup-wide service assignment
-* Service inheritance
-* Bulk host import
-* YAML import/export
-* Git integration
-* Configuration backups
-* Contact groups
-* Service groups
-* Dependency management
-* REST API
-* Web UI integration
-
----
-
-# License
-
-MIT
+GNU General Public License v3.0. See `LICENSE`.

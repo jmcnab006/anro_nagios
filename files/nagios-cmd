@@ -25,22 +25,26 @@ NAGIOS_CFG        Defaults to $NAGIOS_BASE/nagios.cfg.
 NAGIOS_BIN        Defaults to /usr/sbin/nagios4.
 NAGIOS_SERVICE    Defaults to nagios4.
 NAGIOS_BACKUP_DIR Defaults to $NAGIOS_BASE/backup.
+NAGIOS_USER       Defaults to nagios.
+NAGIOS_GROUP      Defaults to nagios.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import grp
 import os
+import pwd
 import re
-import shutil
+import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 # Object names are allowed to contain common Nagios-safe characters.
@@ -66,6 +70,10 @@ NAGIOS_CFG = Path(os.environ.get("NAGIOS_CFG", str(BASE / "nagios.cfg")))
 NAGIOS_BIN = os.environ.get("NAGIOS_BIN", "/usr/sbin/nagios4")
 NAGIOS_SERVICE = os.environ.get("NAGIOS_SERVICE", "nagios4")
 BACKUP_DIR = Path(os.environ.get("NAGIOS_BACKUP_DIR", str(BASE / "backup")))
+NAGIOS_USER = os.environ.get("NAGIOS_USER", "nagios")
+NAGIOS_GROUP = os.environ.get("NAGIOS_GROUP", "nagios")
+MANAGED_FILE_MODE = 0o640
+MANAGED_DIRECTORY_MODE = 0o750
 
 OBJECTS_DIR = BASE / "objects"
 HOSTS_DIR = OBJECTS_DIR / "hosts"
@@ -129,6 +137,22 @@ RESOURCE_META = {
         "default_files": [OBJECTS_DIR / "timeperiods.cfg"],
     },
 }
+
+# nagios-cmd may only modify files below these administrator-owned roots.
+# Aggregate files directly below objects/ remain Ansible-owned and read-only.
+CUSTOM_ROOTS = tuple(
+    dict.fromkeys(
+        [
+            HOSTS_DIR,
+            OBJECTS_DIR / "servicegroups",
+            OBJECTS_DIR / "contacts",
+            OBJECTS_DIR / "contactgroups",
+            OBJECTS_DIR / "commands",
+            OBJECTS_DIR / "templates",
+            OBJECTS_DIR / "timeperiods",
+        ]
+    )
+)
 
 
 class NagiosCmdError(Exception):
@@ -194,13 +218,81 @@ def confirm(prompt: str, force: bool = False) -> None:
         die("aborted")
 
 
+def managed_identity() -> Tuple[int, int]:
+    """Resolve the configured Nagios user/group IDs."""
+    try:
+        uid = pwd.getpwnam(NAGIOS_USER).pw_uid
+        gid = grp.getgrnam(NAGIOS_GROUP).gr_gid
+    except KeyError as exc:
+        raise NagiosCmdError(f"Nagios account not found: {exc}") from exc
+    return uid, gid
+
+
+def apply_managed_metadata(path: Path, mode: int) -> None:
+    """Apply the shared nagios-cmd ownership and permission policy."""
+    uid, gid = managed_identity()
+    current = path.stat()
+    if current.st_uid != uid or current.st_gid != gid:
+        if os.geteuid() == 0:
+            os.chown(path, uid, gid)
+        elif current.st_uid == uid:
+            try:
+                os.chown(path, -1, gid)
+            except PermissionError as exc:
+                raise PermissionError(
+                    f"{path} must use group {NAGIOS_GROUP}; run nagios-cmd as root "
+                    "or ensure the Nagios account can set that group"
+                ) from exc
+        else:
+            raise PermissionError(
+                f"{path} must be owned by {NAGIOS_USER}:{NAGIOS_GROUP}; "
+                "run nagios-cmd as root or the Nagios service account"
+            )
+    os.chmod(path, mode)
+
+
+def ensure_directory(path: Path) -> None:
+    """Create one managed custom directory with consistent metadata."""
+    path.mkdir(parents=True, exist_ok=True)
+    apply_managed_metadata(path, MANAGED_DIRECTORY_MODE)
+
+
+def write_raw_atomic(path: Path, content: str, mode: int, uid: int, gid: int) -> None:
+    """Atomically replace a file with explicit metadata and no validation."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=str(path.parent), delete=False
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(content)
+    try:
+        if os.geteuid() == 0:
+            os.chown(tmp_path, uid, gid)
+        else:
+            current = tmp_path.stat()
+            if current.st_uid != uid:
+                raise PermissionError(
+                    f"cannot set ownership on {tmp_path}; run nagios-cmd as root "
+                    "or the Nagios service account"
+                )
+            if current.st_gid != gid:
+                try:
+                    os.chown(tmp_path, -1, gid)
+                except PermissionError as exc:
+                    raise PermissionError(
+                        f"cannot set group {NAGIOS_GROUP} on {tmp_path}"
+                    ) from exc
+        os.chmod(tmp_path, mode)
+        os.replace(tmp_path, path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 def ensure_layout() -> None:
-    """Create the custom configuration directory skeleton if missing."""
-    paths = [OBJECTS_DIR, HOSTS_DIR, HOSTS_DIR / DEFAULT_HOSTGROUP, SERVICEDEFS_DIR, BACKUP_DIR]
-    for meta in RESOURCE_META.values():
-        paths.append(meta["custom_dir"])
-    for path in paths:
-        path.mkdir(parents=True, exist_ok=True)
+    """Create the administrator-managed configuration skeleton if missing."""
+    paths = [*CUSTOM_ROOTS, HOSTS_DIR / DEFAULT_HOSTGROUP, SERVICEDEFS_DIR, BACKUP_DIR]
+    for path in dict.fromkeys(paths):
+        ensure_directory(path)
 
 
 def read_text(path: Path) -> str:
@@ -219,34 +311,48 @@ def run_command(command: List[str]) -> subprocess.CompletedProcess:
 def validate_config() -> None:
     """Validate Nagios configuration with nagios4 -v."""
     if not Path(NAGIOS_BIN).exists():
-        die(f"Nagios binary not found: {NAGIOS_BIN}")
+        raise NagiosCmdError(f"Nagios binary not found: {NAGIOS_BIN}")
     if not NAGIOS_CFG.exists():
-        die(f"Nagios config not found: {NAGIOS_CFG}")
+        raise NagiosCmdError(f"Nagios config not found: {NAGIOS_CFG}")
     result = run_command([NAGIOS_BIN, "-v", str(NAGIOS_CFG)])
     if result.returncode != 0:
         raise NagiosCmdError(result.stdout.rstrip())
 
 
-def write_text_atomic(path: Path, content: str, force: bool = False, validate: bool = True) -> None:
-    """Atomically write a file and roll back if Nagios validation fails."""
+def write_text_atomic(
+    path: Path, content: str, force: bool = False, validate: bool = True
+) -> None:
+    """Atomically write a custom file and restore content/metadata on failure."""
     if path.exists():
         confirm(f"Overwrite {path}?", force=force)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory(path.parent)
     old_exists = path.exists()
     old_content = path.read_text(encoding="utf-8") if old_exists else None
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(path.parent), delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        tmp.write(content)
-    os.chmod(tmp_path, 0o644)
-    shutil.move(str(tmp_path), str(path))
+    old_stat = path.stat() if old_exists else None
+    uid, gid = managed_identity()
+    if (
+        old_stat is not None
+        and os.geteuid() != 0
+        and (old_stat.st_uid != uid or old_stat.st_gid != gid)
+    ):
+        raise PermissionError(
+            f"cannot safely replace {path} while preserving rollback metadata; "
+            "run nagios-cmd as root"
+        )
+    write_raw_atomic(path, content, MANAGED_FILE_MODE, uid, gid)
     if not validate:
         return
     try:
         validate_config()
     except Exception:
-        if old_exists and old_content is not None:
-            path.write_text(old_content, encoding="utf-8")
-            os.chmod(path, 0o644)
+        if old_exists and old_content is not None and old_stat is not None:
+            write_raw_atomic(
+                path,
+                old_content,
+                stat.S_IMODE(old_stat.st_mode),
+                old_stat.st_uid,
+                old_stat.st_gid,
+            )
         else:
             path.unlink(missing_ok=True)
         raise
@@ -337,15 +443,21 @@ def default_owned_files() -> set[Path]:
     return files
 
 
+def path_is_within(path: Path, root: Path) -> bool:
+    """Return True when a resolved path is inside a resolved directory root."""
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def object_is_custom(obj: NagiosObject) -> bool:
-    """Return True when an object is in a file nagios-cmd may modify."""
+    """Return True only for objects below explicitly administrator-owned roots."""
     path = obj.path.resolve()
     if path in default_owned_files():
         return False
-    try:
-        return path.is_relative_to(OBJECTS_DIR.resolve())
-    except AttributeError:
-        return str(path).startswith(str(OBJECTS_DIR.resolve()))
+    return any(path_is_within(path, root) for root in CUSTOM_ROOTS)
 
 
 def custom_object_path(resource: str, name: str, hostgroup: Optional[str] = None) -> Path:
@@ -423,11 +535,21 @@ def update_object(obj: NagiosObject, fields: Dict[str, str], force: bool) -> Non
 
 
 def remove_object(obj: NagiosObject, force: bool) -> None:
-    """Remove a custom object and delete its file if it becomes empty."""
+    """Remove a custom object and restore its original metadata on failure."""
     if not object_is_custom(obj):
         die(f"refusing to remove Ansible/default-owned object in {obj.path}")
     confirm(f"Remove object from {obj.path}?", force=force)
     original_text = read_text(obj.path)
+    original_stat = obj.path.stat()
+    uid, gid = managed_identity()
+    if (
+        os.geteuid() != 0
+        and (original_stat.st_uid != uid or original_stat.st_gid != gid)
+    ):
+        raise PermissionError(
+            f"cannot safely remove from {obj.path} while preserving rollback metadata; "
+            "run nagios-cmd as root"
+        )
     new_text = (original_text[:obj.start] + original_text[obj.end:]).strip()
     if new_text:
         write_text_atomic(obj.path, new_text + "\n", force=True)
@@ -436,8 +558,13 @@ def remove_object(obj: NagiosObject, force: bool) -> None:
     try:
         validate_config()
     except Exception:
-        obj.path.write_text(original_text, encoding="utf-8")
-        os.chmod(obj.path, 0o644)
+        write_raw_atomic(
+            obj.path,
+            original_text,
+            stat.S_IMODE(original_stat.st_mode),
+            original_stat.st_uid,
+            original_stat.st_gid,
+        )
         raise
 
 

@@ -1,5 +1,14 @@
 ---
-# Compatibility task file retained for callers that imported configure.yaml directly.
+# Deprecated compatibility entry point retained for v2 callers that imported
+# tasks/configure.yaml directly. Use the role entry point instead; this file is
+# planned for removal in v3.
+- name: Warn about deprecated configure task entry point
+  ansible.builtin.debug:
+    msg: >-
+      Directly importing anro_nagios/tasks/configure.yaml is deprecated.
+      Apply the anro_nagios role so validation, Postfix, and service lifecycle
+      tasks are included consistently.
+
 - name: Configure Nagios authentication
   ansible.builtin.import_tasks: authentication.yaml
 

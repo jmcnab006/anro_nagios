@@ -10,6 +10,12 @@
       - nagios4
       - postfix
       - python3-passlib
+    molecule_custom_paths:
+      - /etc/nagios4/objects/hosts/default/hostgroup.cfg
+      - /etc/nagios4/objects/hosts/default/molecule-helper-host.cfg
+      - /etc/nagios4/objects/commands/check_molecule_helper.cfg
+      - /etc/nagios4/objects/commands/manual-molecule.cfg
+      - /etc/nagios4/servicedefs/molecule-ping.tpl
 
   tasks:
     - name: Gather installed package facts
@@ -38,6 +44,13 @@
           - >-
             'Syntax OK' in
             (molecule_apache_configtest.stdout ~ molecule_apache_configtest.stderr)
+
+    - name: Validate Postfix configuration
+      ansible.builtin.command:
+        argv:
+          - postfix
+          - check
+      changed_when: false
 
     - name: Validate Nagios configuration
       ansible.builtin.command:
@@ -99,11 +112,37 @@
           - item.stat.isreg
           - item.stat.mode == item.item.mode
         fail_msg: >-
-          {{ item.item.path }} is missing or has mode {{ item.stat.mode | default('unknown') }};
-          expected {{ item.item.mode }}.
+          {{ item.item.path }} is missing or has mode
+          {{ item.stat.mode | default('unknown') }}; expected {{ item.item.mode }}.
       loop: "{{ molecule_nagios_config_stats.results }}"
       loop_control:
         label: "{{ item.item.path }}"
+
+    - name: Stat administrator-managed Nagios directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: molecule_custom_directory_stats
+      loop:
+        - /etc/nagios4/objects/commands
+        - /etc/nagios4/objects/contacts
+        - /etc/nagios4/objects/contactgroups
+        - /etc/nagios4/objects/hosts/default
+        - /etc/nagios4/objects/servicegroups
+        - /etc/nagios4/objects/templates
+        - /etc/nagios4/objects/timeperiods
+        - /etc/nagios4/servicedefs
+
+    - name: Verify administrator-managed directory permissions
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isdir
+          - item.stat.mode == '0750'
+          - item.stat.pw_name == 'nagios'
+          - item.stat.gr_name == 'nagios'
+      loop: "{{ molecule_custom_directory_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
 
     - name: Stat Nagios htpasswd file
       ansible.builtin.stat:
@@ -118,6 +157,16 @@
           - molecule_htpasswd_stat.stat.mode == '0640'
           - molecule_htpasswd_stat.stat.pw_name == 'root'
           - molecule_htpasswd_stat.stat.gr_name == 'www-data'
+
+    - name: Verify disabled LDAP credential file is absent
+      ansible.builtin.stat:
+        path: /etc/apache2/conf-available/ldap.conf
+      register: molecule_ldap_config_stat
+
+    - name: Assert disabled LDAP credentials were removed
+      ansible.builtin.assert:
+        that:
+          - not molecule_ldap_config_stat.stat.exists
 
     - name: Read rendered CGI configuration
       ansible.builtin.slurp:
@@ -146,7 +195,7 @@
         src: /etc/nagios4/objects/commands.cfg
       register: molecule_commands_config
 
-    - name: Verify custom Nagios command was rendered
+    - name: Verify custom and overridden Nagios commands were rendered
       ansible.builtin.assert:
         that:
           - >-
@@ -155,6 +204,28 @@
           - >-
             'Molecule command OK' in
             (molecule_commands_config.content | b64decode)
+          - >-
+            'Molecule override $ARG2$' in
+            (molecule_commands_config.content | b64decode)
+          - >-
+            (molecule_commands_config.content | b64decode |
+            regex_findall('(?m)^\\s*command_name\\s+check_dummy\\s*$') | length) == 1
+
+    - name: Read rendered Nagios templates
+      ansible.builtin.slurp:
+        src: /etc/nagios4/objects/templates.cfg
+      register: molecule_templates_config
+
+    - name: Verify standard service and contactgroup templates were rendered
+      ansible.builtin.assert:
+        that:
+          - "'name                           cisco-service' in (molecule_templates_config.content | b64decode)"
+          - >-
+            'define contactgroup {' in
+            (molecule_templates_config.content | b64decode)
+          - >-
+            'molecule-contactgroup-template' in
+            (molecule_templates_config.content | b64decode)
 
     - name: Verify unauthenticated Nagios request is rejected
       ansible.builtin.uri:
@@ -189,3 +260,171 @@
       ansible.builtin.assert:
         that:
           - molecule_authenticated_request.content | length > 0
+
+    - name: Install manual service definition used by nagios-cmd
+      ansible.builtin.copy:
+        dest: /etc/nagios4/servicedefs/molecule-ping.tpl
+        owner: nagios
+        group: nagios
+        mode: "0640"
+        content: |
+          define service {
+              use                     local-service
+              host_name               molecule-helper-host
+              service_description     Molecule Helper PING
+              check_command           check_ping!100.0,20%!500.0,60%
+          }
+
+    - name: Install manual custom Nagios object
+      ansible.builtin.copy:
+        dest: /etc/nagios4/objects/commands/manual-molecule.cfg
+        owner: nagios
+        group: nagios
+        mode: "0640"
+        content: |
+          define command {
+              command_name            check_manual_molecule
+              command_line            /usr/lib/nagios/plugins/check_dummy 0 "manual config preserved"
+          }
+
+    - name: Add host using nagios-cmd
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - host
+          - add
+          - molecule-helper-host
+          - 127.0.0.2
+          - --force
+      register: molecule_helper_host_add
+      changed_when: molecule_helper_host_add.rc == 0
+
+    - name: Add custom command using nagios-cmd
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - command
+          - add
+          - check_molecule_helper
+          - --options
+          - command_line=/usr/lib/nagios/plugins/check_dummy 0 helper-ok
+          - --force
+      register: molecule_helper_command_add
+      changed_when: molecule_helper_command_add.rc == 0
+
+    - name: Add service definition to custom host using nagios-cmd
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - service
+          - add
+          - molecule-helper-host
+          - --services
+          - molecule-ping
+          - --force
+      register: molecule_helper_service_add
+      changed_when: molecule_helper_service_add.rc == 0
+
+    - name: Verify nagios-cmd refuses to modify Ansible-owned command
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - command
+          - set
+          - check_dummy
+          - --options
+          - command_line=/usr/lib/nagios/plugins/check_dummy 2 forbidden
+          - --force
+      register: molecule_helper_managed_boundary
+      changed_when: false
+      failed_when: molecule_helper_managed_boundary.rc != 1
+
+    - name: Verify managed boundary rejection was explicit
+      ansible.builtin.assert:
+        that:
+          - >-
+            'refusing to modify Ansible/default-owned object' in
+            molecule_helper_managed_boundary.stderr
+
+    - name: Verify invalid nagios-cmd write is rolled back
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - command
+          - add
+          - molecule-invalid-command
+          - --options
+          - command_line=/usr/lib/nagios/plugins/check_dummy 0 invalid
+          - --options
+          - invalid_directive=value
+          - --force
+      register: molecule_helper_invalid_write
+      changed_when: false
+      failed_when: molecule_helper_invalid_write.rc != 1
+
+    - name: Stat rolled-back invalid command
+      ansible.builtin.stat:
+        path: /etc/nagios4/objects/commands/molecule-invalid-command.cfg
+      register: molecule_invalid_command_stat
+
+    - name: Verify invalid custom configuration was not retained
+      ansible.builtin.assert:
+        that:
+          - not molecule_invalid_command_stat.stat.exists
+
+    - name: Validate configuration after nagios-cmd changes
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - config
+          - check
+      changed_when: false
+
+    - name: Stat custom configuration before reconverge
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      register: molecule_custom_before
+      loop: "{{ molecule_custom_paths }}"
+
+    - name: Verify custom files have expected ownership and permissions
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - item.stat.mode == '0640'
+          - item.stat.pw_name == 'nagios'
+          - item.stat.gr_name == 'nagios'
+      loop: "{{ molecule_custom_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Reconverge role after administrator-managed changes
+      ansible.builtin.include_role:
+        name: anro_nagios
+
+    - name: Stat custom configuration after reconverge
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      register: molecule_custom_after
+      loop: "{{ molecule_custom_paths }}"
+
+    - name: Verify Ansible preserved administrator-managed configuration
+      ansible.builtin.assert:
+        that:
+          - item.0.stat.exists
+          - item.1.stat.exists
+          - item.0.stat.checksum == item.1.stat.checksum
+        fail_msg: "Role reconverge changed administrator-managed file {{ item.0.item }}."
+      loop: "{{ molecule_custom_before.results | zip(molecule_custom_after.results) | list }}"
+      loop_control:
+        label: "{{ item.0.item }}"
+
+    - name: Validate Nagios after role reconverge
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/nagios-cmd
+          - config
+          - check
+      changed_when: false

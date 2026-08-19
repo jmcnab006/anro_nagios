@@ -6,15 +6,17 @@
       - configtest
   register: _anro_nagios_apache_configtest
   changed_when: false
-  failed_when:
-    - _anro_nagios_apache_configtest.rc != 0 or
-      'Syntax OK' not in (_anro_nagios_apache_configtest.stderr ~ _anro_nagios_apache_configtest.stdout)
+  failed_when: >-
+    _anro_nagios_apache_configtest.rc != 0 or
+    'Syntax OK' not in
+    (_anro_nagios_apache_configtest.stderr ~ _anro_nagios_apache_configtest.stdout)
   notify: Reload Apache
 
 - name: Reload Apache
   ansible.builtin.service:
     name: apache2
     state: reloaded
+  when: anro_nagios_apache_service_state != 'stopped'
   throttle: 1
   register: _anro_nagios_apache_reload
   until: _anro_nagios_apache_reload is succeeded
@@ -46,7 +48,18 @@
     state: reloaded
   when: anro_nagios_service_state != 'stopped'
 
+- name: Validate Postfix configuration
+  ansible.builtin.command:
+    argv:
+      - postfix
+      - check
+  changed_when: false
+  notify: Restart Postfix
+
 - name: Restart Postfix
   ansible.builtin.service:
     name: postfix
     state: restarted
+  when:
+    - anro_nagios_postfix_enabled | bool
+    - anro_nagios_postfix_service_state != 'stopped'

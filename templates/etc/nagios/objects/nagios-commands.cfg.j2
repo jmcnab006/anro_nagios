@@ -1,9 +1,0 @@
-{{ ansible_managed | comment }}
-
-
-#jinja2:lstrip_blocks: True
-define command {
-    {% for key in item%}
-    {{ "\t{0:<35}{1:<20}".format(key, item[key]) }}
-    {% endfor %}
-}

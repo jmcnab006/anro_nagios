@@ -14,6 +14,7 @@
   when:
     - anro_nagios_enabled | bool
     - anro_nagios_configure | bool
+    - anro_nagios_postfix_enabled | bool
 
 - name: Configure Nagios authentication
   ansible.builtin.import_tasks: authentication.yaml

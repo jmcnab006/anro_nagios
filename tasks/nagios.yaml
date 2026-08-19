@@ -1,11 +1,34 @@
 ---
+- name: Inspect Nagios compatibility path
+  ansible.builtin.stat:
+    path: "{{ anro_nagios_compat_symlink_path }}"
+    follow: false
+  register: _anro_nagios_compat_path
+  when:
+    - anro_nagios_create_compat_symlink | bool
+    - anro_nagios_cfg_path != anro_nagios_compat_symlink_path
+
+- name: Validate Nagios compatibility path
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (_anro_nagios_compat_path.stat.exists | default(false)) or
+        (_anro_nagios_compat_path.stat.islnk | default(false))
+    fail_msg: >-
+      {{ anro_nagios_compat_symlink_path }} already exists and is not a symlink.
+      The role will not replace administrator-managed configuration.
+  when:
+    - anro_nagios_create_compat_symlink | bool
+    - anro_nagios_cfg_path != anro_nagios_compat_symlink_path
+
 - name: Create compatibility symlink for Nagios configuration
   ansible.builtin.file:
     src: "{{ anro_nagios_cfg_path }}"
-    dest: /etc/nagios
+    dest: "{{ anro_nagios_compat_symlink_path }}"
     state: link
-    force: "{{ anro_nagios_force }}"
-  when: anro_nagios_cfg_path != '/etc/nagios'
+  when:
+    - anro_nagios_create_compat_symlink | bool
+    - anro_nagios_cfg_path != anro_nagios_compat_symlink_path
   notify: Validate Nagios configuration
 
 - name: Configure Nagios CGI settings
@@ -46,7 +69,9 @@
   loop:
     - commands
     - contacts
+    - contactgroups
     - hosts/default
+    - servicegroups
     - templates
     - timeperiods
 
@@ -62,10 +87,7 @@
   ansible.builtin.file:
     path: "{{ anro_nagios_objects_path }}/{{ item }}"
     state: absent
-  loop:
-    - printer.cfg
-    - switch.cfg
-    - windows.cfg
+  loop: "{{ anro_nagios_packaged_objects_remove }}"
   notify: Validate Nagios configuration
 
 - name: Create Nagios service definitions directory
@@ -119,6 +141,14 @@
     owner: "{{ _anro_nagios_cfg.nagios_user }}"
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
+  when: anro_nagios_localhost_enabled | bool
+  notify: Validate Nagios configuration
+
+- name: Remove localhost Nagios object when disabled
+  ansible.builtin.file:
+    path: "{{ anro_nagios_objects_path }}/localhost.cfg"
+    state: absent
+  when: not (anro_nagios_localhost_enabled | bool)
   notify: Validate Nagios configuration
 
 - name: Install Nagios command helper
@@ -129,6 +159,12 @@
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0755"
   when: anro_nagios_install_helper | bool
+
+- name: Remove Nagios command helper when disabled
+  ansible.builtin.file:
+    path: /usr/local/bin/nagios-cmd
+    state: absent
+  when: not (anro_nagios_install_helper | bool)
 
 - name: Install Twilio SMS notification helper
   ansible.builtin.template:

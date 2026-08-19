@@ -1,0 +1,7 @@
+---
+- name: Converge minimal Nagios configuration
+  hosts: server
+  become: true
+
+  roles:
+    - role: anro_nagios

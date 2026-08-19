@@ -1,5 +1,5 @@
 ---
-# Docker configuration for molecule testing
+# Docker configuration for Molecule testing.
 ansible_connection: community.docker.docker
 
 container_command: /lib/systemd/systemd # noqa: var-naming[no-role-prefix]
@@ -10,28 +10,37 @@ container_volumes: # noqa: var-naming[no-role-prefix]
 container_tmpfs: # noqa: var-naming[no-role-prefix]
   - /run
   - /tmp
-container_published_ports:
+container_published_ports: # noqa: var-naming[no-role-prefix]
   - 8081:443
-# Role test variables
 
+# Role test variables.
 anro_nagios_cgi_cfg:
   show_context_help: 1
 
 anro_nagios_cfg:
   use_large_installation_tweaks: 1
 
-anro_nagios_domain: vacuus.biz
+anro_nagios_domain: molecule.test
 anro_nagios_users:
   - name: jmcnab
-    password: 'changeme'
+    password: changeme
 
 anro_nagios_templates_service:
-  - name: 'cisco-service'
-    use: 'generic-service'
+  - name: cisco-service
+    use: generic-service
     max_check_attempts: 3
     register: 0
 
-# Custom command used to prove role-provided Nagios objects are loaded.
+# Exercise the contactgroup template renderer independently from concrete groups.
+anro_nagios_templates_contactgroup:
+  - name: molecule-contactgroup-template
+    register: 0
+
+# Custom command proves append behavior; check_dummy proves a playbook-provided
+# definition cleanly replaces the built-in command with the same name.
 anro_nagios_commands:
   - command_name: check_molecule_marker
     command_line: /usr/lib/nagios/plugins/check_dummy 0 "Molecule command OK"
+  - command_name: check_dummy
+    command_line: >-
+      /usr/lib/nagios/plugins/check_dummy $ARG1$ "Molecule override $ARG2$"

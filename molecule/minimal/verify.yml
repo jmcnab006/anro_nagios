@@ -1,0 +1,79 @@
+---
+- name: Verify optional Nagios functionality can be disabled
+  hosts: server
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Gather installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Verify core Nagios packages remain installed
+      ansible.builtin.assert:
+        that:
+          - "'nagios4' in ansible_facts.packages"
+          - "'apache2' in ansible_facts.packages"
+
+    - name: Stat optional nagios-cmd helper
+      ansible.builtin.stat:
+        path: /usr/local/bin/nagios-cmd
+      register: molecule_minimal_helper
+
+    - name: Stat disabled LDAP configuration
+      ansible.builtin.stat:
+        path: /etc/apache2/conf-available/ldap.conf
+      register: molecule_minimal_ldap
+
+    - name: Verify optional helper and LDAP configuration are absent
+      ansible.builtin.assert:
+        that:
+          - not molecule_minimal_helper.stat.exists
+          - not molecule_minimal_ldap.stat.exists
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Verify requested service states
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['nagios4.service'].state == 'running'
+          - ansible_facts.services['apache2.service'].state == 'stopped'
+
+    - name: Validate Nagios configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/nagios4
+          - -v
+          - /etc/nagios4/nagios.cfg
+      changed_when: false
+    - name: Add marker to role-managed CGI configuration
+      ansible.builtin.lineinfile:
+        path: /etc/nagios4/cgi.cfg
+        line: '# molecule role-disabled marker'
+        state: present
+
+    - name: Stat marked configuration before disabled role run
+      ansible.builtin.stat:
+        path: /etc/nagios4/cgi.cfg
+        checksum_algorithm: sha256
+      register: molecule_minimal_before_disabled
+
+    - name: Run role with master switch disabled
+      ansible.builtin.include_role:
+        name: anro_nagios
+      vars:
+        anro_nagios_enabled: false
+
+    - name: Stat marked configuration after disabled role run
+      ansible.builtin.stat:
+        path: /etc/nagios4/cgi.cfg
+        checksum_algorithm: sha256
+      register: molecule_minimal_after_disabled
+
+    - name: Verify disabled role made no configuration changes
+      ansible.builtin.assert:
+        that:
+          - >-
+            molecule_minimal_before_disabled.stat.checksum ==
+            molecule_minimal_after_disabled.stat.checksum
