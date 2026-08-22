@@ -5,12 +5,13 @@
       - apachectl
       - configtest
   register: _anro_nagios_apache_configtest
-  changed_when: false
+  # changed_when: false
   failed_when: >-
     _anro_nagios_apache_configtest.rc != 0 or
     'Syntax OK' not in
     (_anro_nagios_apache_configtest.stderr ~ _anro_nagios_apache_configtest.stdout)
-  notify: Reload Apache
+  notify:
+    - 'anro_nagios : Reload Apache'
 
 - name: Reload Apache
   ansible.builtin.service:
@@ -24,9 +25,8 @@
   delay: 2
   listen:
     - Reload Apache
-    - certificate updated
-    - cert updated
-    - cert update
+    # add our anro_certs_updated
+    - anro_certs_updated
 
 - name: Validate Nagios configuration
   ansible.builtin.command:

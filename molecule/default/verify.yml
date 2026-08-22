@@ -457,7 +457,7 @@
     - name: Verify Prometheus metrics content
       ansible.builtin.assert:
         that:
-          - "'nagios_molecule_metric 1' in molecule_prometheus_metrics_request.content"
+          - "'nagios_exporter_hosts 1' in molecule_prometheus_metrics_request.content"
 
     - name: Verify exporter listener does not expose metrics.php directly
       ansible.builtin.uri:
