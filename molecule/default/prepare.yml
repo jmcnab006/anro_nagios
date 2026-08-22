@@ -1,6 +1,25 @@
 ---
 - name: Prepare
   hosts: all
+  become: true
   gather_facts: false
 
-  tasks: []
+  tasks:
+    - name: Create Molecule web root
+      ansible.builtin.file:
+        path: /var/www/html
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create Molecule Prometheus PHP endpoint
+      ansible.builtin.copy:
+        dest: /var/www/html/metrics.php
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          <?php
+          header('Content-Type: text/plain; version=0.0.4');
+          echo "nagios_molecule_metric 1\n";

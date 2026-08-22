@@ -158,6 +158,62 @@ argument_specs:
         type: str
         default: root@localhost
 
+      anro_nagios_prometheus_endpoint_enabled:
+        type: bool
+        default: false
+
+      anro_nagios_prometheus_listen_address:
+        type: str
+        default: 0.0.0.0
+
+      anro_nagios_prometheus_port:
+        type: int
+        default: 9117
+
+      anro_nagios_prometheus_path:
+        type: str
+        default: /metrics
+
+      anro_nagios_prometheus_source_file:
+        type: path
+        default: /var/www/html/metrics.php
+
+      anro_nagios_prometheus_https_enabled:
+        type: bool
+        default: false
+
+      anro_nagios_prometheus_auth_enabled:
+        type: bool
+        default: false
+
+      anro_nagios_prometheus_auth_realm:
+        type: str
+        default: prometheus-metrics
+
+      anro_nagios_prometheus_auth_users:
+        type: list
+        elements: dict
+        options:
+          name:
+            type: str
+            required: true
+          password:
+            type: str
+            required: true
+            no_log: true
+
+      anro_nagios_prometheus_htpasswd_file:
+        type: path
+        default: "{{ anro_nagios_cfg_path }}/prometheus.htpasswd"
+
+      anro_nagios_prometheus_certificate_key_file:
+        type: path
+        default: "{{ anro_nagios_certificate_key_file }}"
+
+      anro_nagios_prometheus_certificate_file:
+        type: path
+        default: "{{ anro_nagios_certificate_file }}"
+
       anro_nagios_htpasswd_file:
         type: path
         default: /etc/nagios4/htpassword.users

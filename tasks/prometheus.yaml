@@ -1,0 +1,76 @@
+---
+- name: Validate Prometheus metrics source file
+  ansible.builtin.stat:
+    path: "{{ anro_nagios_prometheus_source_file }}"
+  register: _anro_nagios_prometheus_source
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+
+- name: Require Prometheus metrics source file
+  ansible.builtin.assert:
+    that:
+      - _anro_nagios_prometheus_source.stat.exists
+      - _anro_nagios_prometheus_source.stat.isreg
+    fail_msg: >-
+      Prometheus metrics endpoint is enabled, but
+      {{ anro_nagios_prometheus_source_file }} does not exist or is not a regular file.
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+
+- name: Configure Prometheus metrics authentication users
+  community.general.htpasswd:
+    path: "{{ anro_nagios_prometheus_htpasswd_file }}"
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    state: present
+    owner: root
+    group: www-data
+    mode: "0640"
+  loop: "{{ anro_nagios_prometheus_auth_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - anro_nagios_prometheus_endpoint_enabled | bool
+    - anro_nagios_prometheus_auth_enabled | bool
+  no_log: true
+  notify: Validate Apache configuration
+
+- name: Configure Prometheus Apache metrics site
+  ansible.builtin.template:
+    src: etc/apache2/sites-available/prometheus-metrics.conf.j2
+    dest: /etc/apache2/sites-available/prometheus-metrics.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+  notify: Validate Apache configuration
+
+- name: Enable Prometheus Apache metrics site
+  ansible.builtin.file:
+    src: /etc/apache2/sites-available/prometheus-metrics.conf
+    dest: /etc/apache2/sites-enabled/prometheus-metrics.conf
+    state: link
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+  notify: Validate Apache configuration
+
+- name: Disable Prometheus Apache metrics site
+  ansible.builtin.file:
+    path: /etc/apache2/sites-enabled/prometheus-metrics.conf
+    state: absent
+  when: not (anro_nagios_prometheus_endpoint_enabled | bool)
+  notify: Validate Apache configuration
+
+- name: Remove disabled Prometheus Apache metrics configuration
+  ansible.builtin.file:
+    path: /etc/apache2/sites-available/prometheus-metrics.conf
+    state: absent
+  when: not (anro_nagios_prometheus_endpoint_enabled | bool)
+  notify: Validate Apache configuration
+
+- name: Remove disabled Prometheus metrics htpasswd file
+  ansible.builtin.file:
+    path: "{{ anro_nagios_prometheus_htpasswd_file }}"
+    state: absent
+  when:
+    - not (anro_nagios_prometheus_endpoint_enabled | bool) or
+      not (anro_nagios_prometheus_auth_enabled | bool)
+    - anro_nagios_prometheus_htpasswd_file != anro_nagios_htpasswd_file
+  notify: Validate Apache configuration

@@ -44,3 +44,11 @@ anro_nagios_commands:
   - command_name: check_dummy
     command_line: >-
       /usr/lib/nagios/plugins/check_dummy $ARG1$ "Molecule override $ARG2$"
+
+
+# Exercise the dedicated Prometheus-compatible Apache endpoint.
+anro_nagios_prometheus_endpoint_enabled: true
+anro_nagios_prometheus_auth_enabled: true
+anro_nagios_prometheus_auth_users:
+  - name: prometheus
+    password: prometheus-test-password

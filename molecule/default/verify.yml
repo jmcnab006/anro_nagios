@@ -428,3 +428,38 @@
           - config
           - check
       changed_when: false
+
+    - name: Verify unauthenticated Prometheus metrics request is rejected
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9117/metrics
+        status_code: 401
+
+    - name: Verify invalid Prometheus metrics credentials are rejected
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9117/metrics
+        url_username: "{{ anro_nagios_prometheus_auth_users[0].name }}"
+        url_password: invalid-password
+        force_basic_auth: true
+        status_code: 401
+      no_log: true
+
+    - name: Verify authenticated Prometheus metrics endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9117/metrics
+        url_username: "{{ anro_nagios_prometheus_auth_users[0].name }}"
+        url_password: "{{ anro_nagios_prometheus_auth_users[0].password }}"
+        force_basic_auth: true
+        return_content: true
+        status_code: 200
+      register: molecule_prometheus_metrics_request
+      no_log: true
+
+    - name: Verify Prometheus metrics content
+      ansible.builtin.assert:
+        that:
+          - "'nagios_molecule_metric 1' in molecule_prometheus_metrics_request.content"
+
+    - name: Verify exporter listener does not expose metrics.php directly
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9117/metrics.php
+        status_code: 404

@@ -28,6 +28,12 @@
     - anro_nagios_enabled | bool
     - anro_nagios_configure | bool
 
+- name: Configure Prometheus metrics endpoint
+  ansible.builtin.import_tasks: prometheus.yaml
+  when:
+    - anro_nagios_enabled | bool
+    - anro_nagios_configure | bool
+
 - name: Configure Nagios
   ansible.builtin.import_tasks: nagios.yaml
   when:

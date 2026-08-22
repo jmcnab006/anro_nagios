@@ -1,0 +1,40 @@
+{{ ansible_managed | comment }}
+# Dedicated Prometheus-compatible endpoint for the Nagios PHP metrics exporter.
+Listen {{ anro_nagios_prometheus_listen_address }}:{{ anro_nagios_prometheus_port }}
+
+<VirtualHost {{ anro_nagios_prometheus_listen_address }}:{{ anro_nagios_prometheus_port }}>
+    ServerAdmin {{ anro_nagios_apache_server_admin }}
+    ServerName {{ inventory_hostname }}.{{ anro_nagios_domain }}
+
+{% if anro_nagios_prometheus_https_enabled | bool %}
+    SSLEngine On
+    SSLCertificateKeyFile {{ anro_nagios_prometheus_certificate_key_file }}
+    SSLCertificateFile {{ anro_nagios_prometheus_certificate_file }}
+{% endif %}
+
+    Alias "{{ anro_nagios_prometheus_path }}" "{{ anro_nagios_prometheus_source_file }}"
+
+    <Directory "{{ anro_nagios_prometheus_source_file | dirname }}">
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    <Location "{{ anro_nagios_prometheus_path }}">
+{% if anro_nagios_prometheus_auth_enabled | bool %}
+        AuthType Basic
+        AuthName "{{ anro_nagios_prometheus_auth_realm }}"
+        AuthBasicProvider file
+        AuthUserFile "{{ anro_nagios_prometheus_htpasswd_file }}"
+        Require valid-user
+{% else %}
+        Require all granted
+{% endif %}
+    </Location>
+
+    # Only the configured metrics path is exposed on the exporter listener.
+    RedirectMatch 404 ^/(?!{{ anro_nagios_prometheus_path | regex_escape | regex_replace('^/', '') }}$).*
+
+    ErrorLog ${APACHE_LOG_DIR}/prometheus-metrics-error.log
+    CustomLog ${APACHE_LOG_DIR}/prometheus-metrics-access.log combined
+</VirtualHost>

@@ -150,3 +150,18 @@ anro_nagios_local_services:
 anro_nagios_twilio_number: ""
 anro_nagios_twilio_account_sid: ""
 anro_nagios_twilio_auth_token: ""
+
+# Optional Prometheus-compatible metrics endpoint served directly by Apache.
+# The default port matches the conventional Apache exporter listen port.
+anro_nagios_prometheus_endpoint_enabled: false
+anro_nagios_prometheus_listen_address: "0.0.0.0"
+anro_nagios_prometheus_port: 9117
+anro_nagios_prometheus_path: "/metrics"
+anro_nagios_prometheus_source_file: "/var/www/html/metrics.php"
+anro_nagios_prometheus_https_enabled: false
+anro_nagios_prometheus_auth_enabled: false
+anro_nagios_prometheus_auth_realm: "prometheus-metrics"
+anro_nagios_prometheus_auth_users: "{{ anro_nagios_users }}"
+anro_nagios_prometheus_htpasswd_file: "{{ anro_nagios_cfg_path }}/prometheus.htpasswd"
+anro_nagios_prometheus_certificate_key_file: "{{ anro_nagios_certificate_key_file }}"
+anro_nagios_prometheus_certificate_file: "{{ anro_nagios_certificate_file }}"

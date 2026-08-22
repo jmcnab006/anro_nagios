@@ -279,3 +279,36 @@
       Local load thresholds require a positive warning multiplier and a larger
       critical multiplier.
   when: anro_nagios_localhost_enabled | bool
+
+- name: Validate Prometheus metrics endpoint settings
+  ansible.builtin.assert:
+    that:
+      - anro_nagios_prometheus_port | int > 0
+      - anro_nagios_prometheus_port | int < 65536
+      - anro_nagios_prometheus_listen_address | length > 0
+      - anro_nagios_prometheus_path is match('^/[^ ]*$')
+      - anro_nagios_prometheus_path != '/'
+      - anro_nagios_prometheus_source_file | length > 0
+      - not (anro_nagios_prometheus_auth_enabled | bool) or anro_nagios_prometheus_auth_users | length > 0
+      - not (anro_nagios_prometheus_https_enabled | bool) or anro_nagios_prometheus_certificate_key_file | length > 0
+      - not (anro_nagios_prometheus_https_enabled | bool) or anro_nagios_prometheus_certificate_file | length > 0
+    fail_msg: "Prometheus metrics endpoint configuration is invalid."
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+  no_log: "{{ anro_nagios_prometheus_auth_enabled | bool }}"
+
+- name: Validate Prometheus metrics authentication users
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.password is defined
+      - item.password | length > 0
+    fail_msg: >-
+      Every anro_nagios_prometheus_auth_users entry requires a non-empty name and password.
+  loop: "{{ anro_nagios_prometheus_auth_users }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+  when:
+    - anro_nagios_prometheus_endpoint_enabled | bool
+    - anro_nagios_prometheus_auth_enabled | bool
+  no_log: true
