@@ -1,4 +1,14 @@
 ---
+
+- name: Install Nagios command helper
+  ansible.builtin.copy:
+    src: metrics.php
+    dest: "{{ anro_nagios_prometheus_source_file }}"
+    owner: root
+    group: "{{ _anro_nagios_cfg.nagios_group }}"
+    mode: "0755"
+  when: anro_nagios_prometheus_endpoint_enabled | bool
+
 - name: Validate Prometheus metrics source file
   ansible.builtin.stat:
     path: "{{ anro_nagios_prometheus_source_file }}"
