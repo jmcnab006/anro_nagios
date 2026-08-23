@@ -428,15 +428,6 @@ function emit_host_metrics(
 
     add_metric(
         $families,
-        'nagios_host_problem_suppressed',
-        'Whether the Nagios host problem is acknowledged or in downtime.',
-        'gauge',
-        $labels,
-        $suppressed
-    );
-
-    add_metric(
-        $families,
         'nagios_host_is_flapping',
         'Whether the Nagios host is currently flapping.',
         'gauge',
