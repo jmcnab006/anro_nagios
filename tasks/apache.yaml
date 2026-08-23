@@ -52,6 +52,18 @@
   when: not (anro_nagios_use_ldap | bool)
   notify: Validate Apache configuration
 
+- name: Disable package-provided Nagios CGI configuration
+  ansible.builtin.file:
+    path: /etc/apache2/conf-enabled/nagios4-cgi.conf
+    state: absent
+  notify: Validate and reload Apache
+
+- name: Remove package-provided Nagios CGI configuration
+  ansible.builtin.file:
+    path: /etc/apache2/conf-available/nagios4-cgi.conf
+    state: absent
+  notify: Validate and reload Apache
+
 - name: Remove stored Apache LDAP credentials when disabled
   ansible.builtin.file:
     path: /etc/apache2/conf-available/ldap.conf

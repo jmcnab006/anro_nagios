@@ -12,6 +12,7 @@ container_tmpfs: # noqa: var-naming[no-role-prefix]
   - /tmp
 container_published_ports: # noqa: var-naming[no-role-prefix]
   - 8081:443
+  - 8080:80
 
 # Role test variables.
 anro_nagios_cgi_cfg:
@@ -22,7 +23,7 @@ anro_nagios_cfg:
 
 anro_nagios_domain: molecule.test
 anro_nagios_users:
-  - name: jmcnab
+  - name: nagiosadmin
     password: changeme
 
 anro_nagios_templates_service:
