@@ -56,13 +56,13 @@
   ansible.builtin.file:
     path: /etc/apache2/conf-enabled/nagios4-cgi.conf
     state: absent
-  notify: Validate and reload Apache
+  notify: Validate Apache configuration
 
 - name: Remove package-provided Nagios CGI configuration
   ansible.builtin.file:
     path: /etc/apache2/conf-available/nagios4-cgi.conf
     state: absent
-  notify: Validate and reload Apache
+  notify: Validate Apache configuration
 
 - name: Remove stored Apache LDAP credentials when disabled
   ansible.builtin.file:

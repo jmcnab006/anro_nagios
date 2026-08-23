@@ -434,7 +434,14 @@ function emit_host_metrics(
         $labels,
         $data['is_flapping'] ?? null
     );
-
+    add_metric(
+        $families,
+        'nagios_host_last_state_change',
+        'Unix timestamp of last host state change.',
+        'gauge',
+        $labels,
+        $data['last_state_change'] ?? null
+    );
     /*
      * Host ping performance data is deliberately static rather than
      * dynamically exposing arbitrary plugin perfdata names.
@@ -553,12 +560,13 @@ function emit_service_metrics(
 
     add_metric(
         $families,
-        'nagios_service_check_last_state_change',
+        'nagios_service_last_state_change',
         'Unix timestamp of the last Nagios service state change.',
         'gauge',
         $labels,
         $data['last_state_change'] ?? null
     );
+
 
     $perfdata = parse_performance_data(
         $data['performance_data'] ?? ''
