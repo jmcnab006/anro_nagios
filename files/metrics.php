@@ -393,11 +393,38 @@ function emit_host_metrics(
             ?? $data['execution_time']
             ?? null
     );
-
+/*
+    // removed in favor of separate ack vs downtime updated jgm
     $suppressed = (
         (int) ($data['scheduled_downtime_depth'] ?? 0) > 0
         || (int) ($data['problem_has_been_acknowledged'] ?? 0) > 0
     ) ? 1 : 0;
+    add_metric(
+        $families,
+        'nagios_host_problem_suppressed',
+        'Whether the Nagios host problem is acknowledged or in downtime.',
+        'gauge',
+        $labels,
+        $suppressed
+    );
+*/
+    add_metric(
+        $families,
+        'nagios_host_acknowledged',
+        'Whether the Nagios host problem is acknowledged.',
+        'gauge',
+        $labels,
+        $data['problem_has_been_acknowledged'] ?? null
+    );
+
+    add_metric(
+        $families,
+        'nagios_host_scheduled_downtime_depth',
+        'Whether the Nagios host problem is in downtime.',
+        'gauge',
+        $labels,
+        $data['scheduled_downtime_depth'] ?? null
+    );
 
     add_metric(
         $families,
@@ -497,11 +524,20 @@ function emit_service_metrics(
 
     add_metric(
         $families,
-        'nagios_service_problem_acknowledged',
+        'nagios_service_acknowledged',
         'Whether the Nagios service problem is acknowledged.',
         'gauge',
         $labels,
         $data['problem_has_been_acknowledged'] ?? null
+    );
+
+    add_metric(
+        $families,
+        'nagios_service_scheduled_downtime_depth',
+        'Whether the Nagios service problem is in downtime.',
+        'gauge',
+        $labels,
+        $data['scheduled_downtime_depth'] ?? null
     );
 
     add_metric(
