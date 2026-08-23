@@ -13,6 +13,7 @@ container_tmpfs: # noqa: var-naming[no-role-prefix]
 container_published_ports: # noqa: var-naming[no-role-prefix]
   - 8081:443
   - 8080:80
+  - 9117:9117
 
 # Role test variables.
 anro_nagios_cgi_cfg:
