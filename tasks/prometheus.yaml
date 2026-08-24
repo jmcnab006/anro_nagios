@@ -1,6 +1,6 @@
 ---
 
-- name: Install Nagios command helper
+- name: Install prometheus exporter
   ansible.builtin.copy:
     src: metrics.php
     dest: "{{ anro_nagios_prometheus_source_file }}"
