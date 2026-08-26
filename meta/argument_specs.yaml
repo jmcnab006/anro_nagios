@@ -2,22 +2,34 @@
 argument_specs:
   main:
     short_description: Configure and manage Nagios Core on Ubuntu
+    description:
+      - Installs Nagios Core and supporting packages from Ubuntu repositories.
+      - Manages a standardized Nagios baseline while preserving administrator-managed custom configuration.
+      - Optionally configures Apache, Postfix, LDAP authentication, Prometheus metrics exposure, and helper tooling.
     options:
       anro_nagios_enabled:
         type: bool
         default: true
+        description:
+          - Enables or disables all role-managed Nagios configuration.
 
       anro_nagios_install:
         type: bool
         default: true
+        description:
+          - Controls whether Nagios and supporting packages are installed.
 
       anro_nagios_configure:
         type: bool
         default: true
+        description:
+          - Controls whether the role manages Nagios and related service configuration.
 
       anro_nagios_install_helper:
         type: bool
         default: true
+        description:
+          - Installs the nagios-cmd helper used to manage administrator-owned Nagios objects.
 
       anro_nagios_package_state:
         type: str
@@ -25,22 +37,32 @@ argument_specs:
         choices:
           - present
           - latest
+        description:
+          - Desired package state for role-managed Nagios packages.
 
       anro_nagios_packages:
         type: list
         elements: str
+        description:
+          - Base packages required for the Nagios installation.
 
       anro_nagios_postfix_enabled:
         type: bool
         default: true
+        description:
+          - Enables Postfix installation and configuration for Nagios notifications.
 
       anro_nagios_postfix_packages:
         type: list
         elements: str
+        description:
+          - Packages required for Postfix mail delivery.
 
       anro_nagios_postfix_service_enabled:
         type: bool
         default: true
+        description:
+          - Controls whether the Postfix service is enabled at boot.
 
       anro_nagios_postfix_service_state:
         type: str
@@ -48,29 +70,45 @@ argument_specs:
         choices:
           - started
           - stopped
+        description:
+          - Desired runtime state of the Postfix service.
 
       anro_nagios_postfix_relayhost:
         type: str
         default: ""
+        description:
+          - Optional SMTP relay host used by Postfix.
+          - An empty value leaves relayhost unset.
 
       anro_nagios_postfix_inet_interfaces:
         type: str
         default: loopback-only
+        description:
+          - Value assigned to Postfix inet_interfaces.
 
       anro_nagios_domain:
         type: str
         default: example.com
+        description:
+          - DNS domain used when constructing Nagios host and mail configuration.
 
       anro_nagios_server_name:
         type: str
+        description:
+          - Server name used by Apache and Nagios-facing configuration.
+          - Should normally be the monitoring server FQDN.
 
       anro_nagios_service:
         type: str
         default: nagios4.service
+        description:
+          - Nagios service unit name managed by the role.
 
       anro_nagios_service_enabled:
         type: bool
         default: true
+        description:
+          - Controls whether the Nagios service is enabled at boot.
 
       anro_nagios_service_state:
         type: str
@@ -78,10 +116,14 @@ argument_specs:
         choices:
           - started
           - stopped
+        description:
+          - Desired runtime state of the Nagios service.
 
       anro_nagios_apache_service_enabled:
         type: bool
         default: true
+        description:
+          - Controls whether Apache is enabled at boot.
 
       anro_nagios_apache_service_state:
         type: str
@@ -89,48 +131,72 @@ argument_specs:
         choices:
           - started
           - stopped
+        description:
+          - Desired runtime state of the Apache service.
 
       anro_nagios_create_compat_symlink:
         type: bool
         default: true
+        description:
+          - Creates a compatibility symlink for installations expecting /etc/nagios.
 
       anro_nagios_compat_symlink_path:
         type: path
         default: /etc/nagios
+        description:
+          - Destination path for the Nagios compatibility symlink.
 
       anro_nagios_users:
         type: list
         elements: dict
         default: []
+        description:
+          - Local Apache Basic Auth users permitted to access the Nagios web interface.
         options:
           name:
             type: str
             required: true
+            description:
+              - Username stored in the Nagios htpasswd file.
           password:
             type: str
             required: true
             no_log: true
+            description:
+              - Password for the Nagios web user.
 
       anro_nagios_cfg_path:
         type: path
         default: /etc/nagios4
+        description:
+          - Root Nagios configuration directory.
 
       anro_nagios_objects_path:
         type: path
+        description:
+          - Directory containing role-managed and administrator-managed Nagios object definitions.
 
       anro_nagios_binary:
         type: path
         default: /usr/sbin/nagios4
+        description:
+          - Path to the Nagios executable used for configuration validation.
 
       anro_nagios_cfg_file:
         type: path
+        description:
+          - Path to the primary nagios.cfg configuration file.
 
       anro_nagios_libexec_path:
         type: path
         default: /usr/lib/nagios/plugins
+        description:
+          - Directory containing Nagios monitoring plugins.
 
       anro_nagios_cfg_backup_path:
         type: path
+        description:
+          - Directory used for Nagios configuration backups where applicable.
 
       anro_nagios_packaged_objects_remove:
         type: list
@@ -139,244 +205,361 @@ argument_specs:
           - printer.cfg
           - switch.cfg
           - windows.cfg
+        description:
+          - Ubuntu package-provided example object files removed from the active Nagios configuration.
 
       anro_nagios_add_packages:
         type: list
         elements: str
         default: []
+        description:
+          - Additional packages to install alongside the standard Nagios package set.
 
       anro_nagios_remove_packages:
         type: list
         elements: str
         default: []
+        description:
+          - Packages to explicitly remove during role execution.
 
       anro_nagios_auth_realm:
         type: str
         default: monitoring
+        description:
+          - HTTP authentication realm presented by the Nagios web interface.
 
       anro_nagios_apache_server_admin:
         type: str
         default: root@localhost
+        description:
+          - Apache ServerAdmin value used by the Nagios virtual host.
 
       anro_nagios_prometheus_endpoint_enabled:
         type: bool
         default: false
+        description:
+          - Enables the dedicated Apache Prometheus metrics endpoint.
 
       anro_nagios_prometheus_listen_address:
         type: str
         default: 0.0.0.0
+        description:
+          - Address on which the Prometheus metrics Apache listener binds.
 
       anro_nagios_prometheus_port:
         type: int
         default: 9117
+        description:
+          - TCP port used by the Prometheus-compatible Apache metrics endpoint.
 
       anro_nagios_prometheus_path:
         type: str
         default: /metrics
+        description:
+          - URL path exposed to Prometheus for metrics scraping.
 
       anro_nagios_prometheus_source_file:
         type: path
         default: /var/www/html/metrics.php
+        description:
+          - Existing PHP metrics exporter file exposed through the Prometheus endpoint.
 
       anro_nagios_prometheus_https_enabled:
         type: bool
         default: false
+        description:
+          - Enables TLS for the Prometheus metrics endpoint.
 
       anro_nagios_prometheus_auth_enabled:
         type: bool
         default: false
+        description:
+          - Enables HTTP Basic Authentication for the Prometheus metrics endpoint.
 
       anro_nagios_prometheus_auth_realm:
         type: str
         default: prometheus-metrics
+        description:
+          - Authentication realm presented by the Prometheus metrics endpoint.
 
       anro_nagios_prometheus_auth_users:
         type: list
         elements: dict
+        description:
+          - Local Basic Auth users allowed to scrape the Prometheus metrics endpoint.
         options:
           name:
             type: str
             required: true
+            description:
+              - Username stored in the Prometheus endpoint htpasswd file.
           password:
             type: str
             required: true
             no_log: true
+            description:
+              - Password for the Prometheus endpoint user.
 
       anro_nagios_prometheus_htpasswd_file:
         type: path
         default: "{{ anro_nagios_cfg_path }}/prometheus.htpasswd"
+        description:
+          - Path to the htpasswd file used by the Prometheus endpoint.
 
       anro_nagios_prometheus_certificate_key_file:
         type: path
         default: "{{ anro_nagios_certificate_key_file }}"
+        description:
+          - TLS private key used by the Prometheus endpoint when HTTPS is enabled.
 
       anro_nagios_prometheus_certificate_file:
         type: path
         default: "{{ anro_nagios_certificate_file }}"
+        description:
+          - TLS certificate used by the Prometheus endpoint when HTTPS is enabled.
 
       anro_nagios_htpasswd_file:
         type: path
         default: /etc/nagios4/htpassword.users
+        description:
+          - htpasswd file used for Nagios web authentication.
 
       anro_nagios_certificate_key_file:
         type: path
         default: /etc/ssl/private/ssl-cert-snakeoil.key
+        description:
+          - TLS private key used by the Nagios Apache virtual host.
 
       anro_nagios_certificate_file:
         type: path
         default: /etc/ssl/certs/ssl-cert-snakeoil.pem
+        description:
+          - TLS certificate used by the Nagios Apache virtual host.
 
-      # Deprecated compatibility input. The certificate chain should be included
-      # in anro_nagios_certificate_file for modern Apache releases.
       anro_nagios_certificate_chain_file:
         type: path
         default: /etc/ssl/certs/ssl-cert-snakeoil.pem
+        description:
+          - Deprecated compatibility variable for a separate certificate chain file.
+          - Prefer including the certificate chain in anro_nagios_certificate_file.
 
       anro_nagios_basic_auth_provider:
         type: list
         elements: str
         default:
           - file
+        description:
+          - Apache authentication providers used by the Nagios web interface.
 
       anro_nagios_use_ldap:
         type: bool
         default: false
+        description:
+          - Enables LDAP authentication support for the Nagios web interface.
 
       anro_nagios_ldap_provider:
         type: str
         default: nagios-ldap
+        description:
+          - Apache AuthnProviderAlias name used for Nagios LDAP authentication.
 
       anro_nagios_certificate_auth_file:
         type: path
         default: /etc/ssl/certs/ssl-cert-snakeoil.pem
+        description:
+          - CA or certificate file used to validate LDAP TLS connections where applicable.
 
       anro_nagios_auth_ldap_bind_dn:
         type: str
         default: ""
+        description:
+          - LDAP bind distinguished name used for directory authentication.
 
       anro_nagios_auth_ldap_bind_pw:
         type: str
         default: ""
         no_log: true
+        description:
+          - Password for the LDAP bind account.
 
       anro_nagios_auth_ldap_url:
         type: str
         default: ""
+        description:
+          - LDAP URL used by Apache authentication.
 
       anro_nagios_cgi_cfg:
         type: dict
         default: {}
+        description:
+          - Overrides merged into the role-managed Nagios cgi.cfg configuration.
 
       anro_nagios_cfg:
         type: dict
         default: {}
+        description:
+          - Overrides merged into the role-managed nagios.cfg configuration.
 
       anro_nagios_resource_cfg:
         type: dict
         default: {}
+        description:
+          - Overrides merged into the role-managed resource.cfg configuration.
 
       anro_nagios_commands:
         type: list
         elements: dict
         default: []
+        description:
+          - Standard Nagios command definitions rendered into the Ansible-managed commands configuration.
         options:
           command_name:
             type: str
             required: true
+            description:
+              - Nagios command_name value.
           command_line:
             type: str
             required: true
+            description:
+              - Command line executed by Nagios.
 
       anro_nagios_contacts:
         type: list
         elements: dict
         default: []
+        description:
+          - Standard Nagios contact definitions shared across managed servers.
 
       anro_nagios_contactgroups:
         type: list
         elements: dict
         default: []
+        description:
+          - Standard Nagios contact group definitions shared across managed servers.
 
       anro_nagios_templates_host:
         type: list
         elements: dict
         default: []
+        description:
+          - Nagios host template definitions rendered by the role.
 
       anro_nagios_templates_contact:
         type: list
         elements: dict
         default: []
+        description:
+          - Nagios contact template definitions rendered by the role.
 
       anro_nagios_templates_contactgroup:
         type: list
         elements: dict
         default: []
+        description:
+          - Nagios contact group template definitions rendered by the role.
 
       anro_nagios_templates_service:
         type: list
         elements: dict
         default: []
+        description:
+          - Nagios service template definitions rendered by the role.
 
       anro_nagios_templates_timeperiod:
         type: list
         elements: dict
         default: []
+        description:
+          - Nagios time period template definitions rendered by the role.
 
       anro_nagios_localhost_enabled:
         type: bool
         default: true
+        description:
+          - Enables creation of the role-managed local Nagios host definition and baseline services.
 
       anro_nagios_localhost_host_name:
         type: str
+        description:
+          - Host name assigned to the local Nagios host object.
 
       anro_nagios_localhost_alias:
         type: str
+        description:
+          - Human-readable alias assigned to the local Nagios host object.
 
       anro_nagios_localhost_address:
         type: str
         default: 127.0.0.1
+        description:
+          - Address monitored by the local Nagios host object.
 
       anro_nagios_localhost_hostgroup:
         type: str
         default: monitor-servers
+        description:
+          - Nagios host group assigned to the local monitoring server.
 
       anro_nagios_local_load_warning_multiplier:
         type: float
         default: 1.0
+        description:
+          - CPU-count multiplier used to derive local load warning thresholds.
 
       anro_nagios_local_load_critical_multiplier:
         type: float
         default: 1.5
+        description:
+          - CPU-count multiplier used to derive local load critical thresholds.
 
       anro_nagios_local_services:
         type: list
         elements: dict
+        description:
+          - Nagios service definitions applied to the local monitoring host.
         options:
           service_description:
             type: str
             required: true
+            description:
+              - Nagios service_description value.
           check_command:
             type: str
+            description:
+              - Nagios check command used for the service.
           auto_load:
             type: bool
             default: false
+            description:
+              - Indicates that load thresholds should be calculated automatically from CPU count.
           use:
             type: str
             default: local-service
+            description:
+              - Nagios service template inherited by the local service.
           options:
             type: dict
             default: {}
+            description:
+              - Additional Nagios service object directives rendered for this service.
 
       anro_nagios_twilio_number:
         type: str
         default: ""
+        description:
+          - Twilio source telephone number used by notification integrations.
 
       anro_nagios_twilio_account_sid:
         type: str
         default: ""
         no_log: true
+        description:
+          - Twilio account SID used by notification integrations.
 
       anro_nagios_twilio_auth_token:
         type: str
         default: ""
         no_log: true
+        description:
+          - Twilio authentication token used by notification integrations.
