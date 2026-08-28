@@ -29,7 +29,7 @@
   when:
     - anro_nagios_create_compat_symlink | bool
     - anro_nagios_cfg_path != anro_nagios_compat_symlink_path
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure Nagios CGI settings
   ansible.builtin.template:
@@ -38,7 +38,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure Nagios core settings
   ansible.builtin.template:
@@ -47,7 +47,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure Nagios resource settings
   ansible.builtin.template:
@@ -57,7 +57,7 @@
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
   no_log: true
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Create Nagios custom object directories
   ansible.builtin.file:
@@ -88,7 +88,7 @@
     path: "{{ anro_nagios_objects_path }}/{{ item }}"
     state: absent
   loop: "{{ anro_nagios_packaged_objects_remove }}"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Create Nagios service definitions directory
   ansible.builtin.file:
@@ -105,7 +105,7 @@
     owner: "{{ _anro_nagios_cfg.nagios_user }}"
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure default Nagios contacts
   ansible.builtin.template:
@@ -114,7 +114,7 @@
     owner: "{{ _anro_nagios_cfg.nagios_user }}"
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure default Nagios templates
   ansible.builtin.template:
@@ -123,7 +123,7 @@
     owner: "{{ _anro_nagios_cfg.nagios_user }}"
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure default Nagios time periods
   ansible.builtin.template:
@@ -132,7 +132,7 @@
     owner: "{{ _anro_nagios_cfg.nagios_user }}"
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Configure localhost Nagios object
   ansible.builtin.template:
@@ -142,14 +142,14 @@
     group: "{{ _anro_nagios_cfg.nagios_group }}"
     mode: "0640"
   when: anro_nagios_localhost_enabled | bool
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Remove localhost Nagios object when disabled
   ansible.builtin.file:
     path: "{{ anro_nagios_objects_path }}/localhost.cfg"
     state: absent
   when: not (anro_nagios_localhost_enabled | bool)
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios
 
 - name: Install Nagios command helper
   ansible.builtin.copy:
@@ -178,4 +178,4 @@
     - anro_nagios_twilio_account_sid | length > 0
     - anro_nagios_twilio_auth_token | length > 0
   no_log: true
-  notify: Validate Nagios configuration
+  notify: anro_reload_nagios

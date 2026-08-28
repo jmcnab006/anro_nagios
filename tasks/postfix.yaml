@@ -6,7 +6,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Validate Postfix configuration
+  notify: anro_restart_postfix
 
 - name: Configure Postfix
   ansible.builtin.template:
@@ -15,4 +15,4 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Validate Postfix configuration
+  notify: anro_restart_postfix

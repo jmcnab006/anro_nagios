@@ -13,4 +13,4 @@
     label: "{{ item.name }}"
   when: anro_nagios_users | length > 0
   no_log: true
-  notify: Validate Apache configuration
+  notify: anro_reload_apache

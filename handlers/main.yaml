@@ -5,13 +5,13 @@
       - apachectl
       - configtest
   register: _anro_nagios_apache_configtest
+  listen:
+    - anro_reload_apache
   changed_when: false
   failed_when: >-
     _anro_nagios_apache_configtest.rc != 0 or
     'Syntax OK' not in
     (_anro_nagios_apache_configtest.stderr ~ _anro_nagios_apache_configtest.stdout)
-  notify:
-    - Reload Apache
 
 - name: Reload Apache
   ansible.builtin.service:
@@ -24,7 +24,7 @@
   retries: 5
   delay: 2
   listen:
-    - Reload Apache
+    - anro_reload_apache
     # add our anro_certs_updated
     - anro_certs_updated
 
@@ -35,17 +35,20 @@
       - -v
       - "{{ anro_nagios_cfg_file }}"
   register: _anro_nagios_configtest
+  listen:
+    - anro_reload_nagios
   changed_when: false
   failed_when: >-
     _anro_nagios_configtest.rc != 0 or
     'Total Errors:   0' not in
     (_anro_nagios_configtest.stdout ~ _anro_nagios_configtest.stderr)
-  notify: Reload Nagios
 
 - name: Reload Nagios
   ansible.builtin.service:
     name: "{{ anro_nagios_service }}"
     state: reloaded
+  listen:
+    - anro_reload_nagios
   when: anro_nagios_service_state != 'stopped'
 
 - name: Validate Postfix configuration
@@ -54,12 +57,13 @@
       - postfix
       - check
   changed_when: false
-  notify: Restart Postfix
+  listen: anro_restart_postfix
 
 - name: Restart Postfix
   ansible.builtin.service:
     name: postfix
     state: restarted
+  listen: anro_restart_postfix
   when:
     - anro_nagios_postfix_enabled | bool
     - anro_nagios_postfix_service_state != 'stopped'

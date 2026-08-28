@@ -41,7 +41,7 @@
     - anro_nagios_prometheus_endpoint_enabled | bool
     - anro_nagios_prometheus_auth_enabled | bool
   no_log: true
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
 
 - name: Configure Prometheus Apache metrics site
   ansible.builtin.template:
@@ -51,7 +51,7 @@
     group: root
     mode: "0644"
   when: anro_nagios_prometheus_endpoint_enabled | bool
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
 
 - name: Enable Prometheus Apache metrics site
   ansible.builtin.file:
@@ -59,21 +59,21 @@
     dest: /etc/apache2/sites-enabled/prometheus-metrics.conf
     state: link
   when: anro_nagios_prometheus_endpoint_enabled | bool
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
 
 - name: Disable Prometheus Apache metrics site
   ansible.builtin.file:
     path: /etc/apache2/sites-enabled/prometheus-metrics.conf
     state: absent
   when: not (anro_nagios_prometheus_endpoint_enabled | bool)
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
 
 - name: Remove disabled Prometheus Apache metrics configuration
   ansible.builtin.file:
     path: /etc/apache2/sites-available/prometheus-metrics.conf
     state: absent
   when: not (anro_nagios_prometheus_endpoint_enabled | bool)
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
 
 - name: Remove disabled Prometheus metrics htpasswd file
   ansible.builtin.file:
@@ -83,4 +83,4 @@
     - not (anro_nagios_prometheus_endpoint_enabled | bool) or
       not (anro_nagios_prometheus_auth_enabled | bool)
     - anro_nagios_prometheus_htpasswd_file != anro_nagios_htpasswd_file
-  notify: Validate Apache configuration
+  notify: anro_reload_apache
