@@ -393,21 +393,32 @@ function emit_host_metrics(
             ?? $data['execution_time']
             ?? null
     );
-/*
-    // removed in favor of separate ack vs downtime updated jgm
-    $suppressed = (
-        (int) ($data['scheduled_downtime_depth'] ?? 0) > 0
-        || (int) ($data['problem_has_been_acknowledged'] ?? 0) > 0
-    ) ? 1 : 0;
+
+    // aggregate ignored this might need to be expanded to more
+    $suppressed = max(
+        (int)!((bool)($data['active_checks_enabled'] ?? 0)),
+        (int)($data['scheduled_downtime_depth'] ?? 0),
+        (int)($data['problem_has_been_acknowledged'] ?? 0)
+    );
+
     add_metric(
         $families,
-        'nagios_host_problem_suppressed',
-        'Whether the Nagios host problem is acknowledged or in downtime.',
+        'nagios_host_ignored',
+        'Whether the Nagios host problem is acknowledged, has scheduled dowtime or active checks disabled.',
         'gauge',
         $labels,
         $suppressed
     );
-*/
+
+    add_metric(
+        $families,
+        'nagios_host_active_checks_enabled',
+        'Whether the Nagios host problem has active_checks_enabled.',
+        'gauge',
+        $labels,
+        $data['problem_has_been_acknowledged'] ?? null
+    );
+
     add_metric(
         $families,
         'nagios_host_acknowledged',
@@ -519,7 +530,21 @@ function emit_service_metrics(
         $labels,
         $data['state_type'] ?? null
     );
+    // aggregate ignored this might need to be expanded to more
+    $suppressed = max(
+        (int)!((bool)($data['active_checks_enabled'] ?? 0)),
+        (int)($data['scheduled_downtime_depth'] ?? 0),
+        (int)($data['problem_has_been_acknowledged'] ?? 0)
+    );
 
+    add_metric(
+        $families,
+        'nagios_service_ignored',
+        'Whether the Nagios service problem is acknowledged, has scheduled dowtime or active checks disabled.',
+        'gauge',
+        $labels,
+        $suppressed
+    );
     add_metric(
         $families,
         'nagios_service_acknowledged',
@@ -527,6 +552,14 @@ function emit_service_metrics(
         'gauge',
         $labels,
         $data['problem_has_been_acknowledged'] ?? null
+    );
+    add_metric(
+        $families,
+        'nagios_service_active_checks_enabled',
+        'Whether the Nagios service has active_checks_enabled.',
+        'gauge',
+        $labels,
+        $data['active_checks_enabled'] ?? null
     );
 
     add_metric(
