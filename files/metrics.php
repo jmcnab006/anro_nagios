@@ -590,7 +590,14 @@ function emit_service_metrics(
             ?? $data['execution_time']
             ?? null
     );
-
+    add_metric(
+        $families,
+        'nagios_service_is_flapping',
+        'Whether the Nagios service is currently flapping.',
+        'gauge',
+        $labels,
+        $data['is_flapping'] ?? null
+    );
     add_metric(
         $families,
         'nagios_service_last_state_change',
