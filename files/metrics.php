@@ -416,7 +416,7 @@ function emit_host_metrics(
         'Whether the Nagios host problem has active_checks_enabled.',
         'gauge',
         $labels,
-        $data['problem_has_been_acknowledged'] ?? null
+        $data['active_checks_enabled'] ?? null
     );
 
     add_metric(
