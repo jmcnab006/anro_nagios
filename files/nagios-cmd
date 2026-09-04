@@ -15,7 +15,7 @@ Design goals
 2. Keep hosts in a hostgroup-based directory layout.
 3. Use service definition templates for common service blocks.
 4. Prompt before overwriting or removing files unless -f/--force is supplied.
-5. Validate Nagios configuration after writes/removals and roll back failed writes.
+5. Keep configuration edits separate from explicit operator validation/reload actions.
 
 Environment overrides
 =====================
@@ -37,7 +37,6 @@ import grp
 import os
 import pwd
 import re
-import stat
 import subprocess
 import sys
 import tarfile
@@ -137,6 +136,183 @@ RESOURCE_META = {
         "default_files": [OBJECTS_DIR / "timeperiods.cfg"],
     },
 }
+
+
+# Nagios Core 4 object directives used for CLI help.
+# Required flags follow the Nagios Core object-definition documentation;
+# inherited values from templates can satisfy required directives.
+COMMON_DIRECTIVES = [
+    ("name", "template_name", False),
+    ("use", "template_name[,template_name...]", False),
+    ("register", "[0/1]", False),
+]
+
+OBJECT_DIRECTIVES = {
+    "host": [
+        ("host_name", "host_name", True),
+        ("alias", "alias", False),
+        ("display_name", "display_name", False),
+        ("address", "address", False),
+        ("parents", "host_names", False),
+        ("importance", "#", False),
+        ("hostgroups", "hostgroup_names", False),
+        ("check_command", "command_name", False),
+        ("initial_state", "[o,d,u]", False),
+        ("max_check_attempts", "#", True),
+        ("check_interval", "#", True),
+        ("retry_interval", "#", True),
+        ("active_checks_enabled", "[0/1]", False),
+        ("passive_checks_enabled", "[0/1]", False),
+        ("check_period", "timeperiod_name", False),
+        ("obsess_over_host / obsess", "[0/1]", False),
+        ("check_freshness", "[0/1]", False),
+        ("freshness_threshold", "#", False),
+        ("event_handler", "command_name", False),
+        ("event_handler_enabled", "[0/1]", False),
+        ("low_flap_threshold", "#", False),
+        ("high_flap_threshold", "#", False),
+        ("flap_detection_enabled", "[0/1]", False),
+        ("flap_detection_options", "[o,d,u]", False),
+        ("process_perf_data", "[0/1]", False),
+        ("retain_status_information", "[0/1]", False),
+        ("retain_nonstatus_information", "[0/1]", False),
+        ("contacts", "contacts", False),
+        ("contact_groups", "contact_groups", False),
+        ("notification_interval", "#", True),
+        ("first_notification_delay", "#", False),
+        ("notification_period", "timeperiod_name", True),
+        ("notification_options", "[d,u,r,f,s,n]", True),
+        ("notifications_enabled", "[0/1]", True),
+        ("stalking_options", "[o,d,u,N]", False),
+        ("notes", "note_string", False),
+        ("notes_url", "url", False),
+        ("action_url", "url", False),
+        ("icon_image", "image_file", False),
+        ("icon_image_alt", "alt_string", False),
+        ("vrml_image", "image_file", False),
+        ("statusmap_image", "image_file", False),
+        ("2d_coords", "x_coord,y_coord", False),
+        ("3d_coords", "x_coord,y_coord,z_coord", False),
+    ],
+    "hostgroup": [
+        ("hostgroup_name", "hostgroup_name", True),
+        ("alias", "alias", True),
+        ("members", "hosts", False),
+        ("hostgroup_members", "hostgroups", False),
+        ("notes", "note_string", False),
+        ("notes_url", "url", False),
+        ("action_url", "url", False),
+    ],
+    "service": [
+        ("host_name", "host_name", False),
+        ("hostgroup_name", "hostgroup_name", False),
+        ("service_description", "service_description", True),
+        ("display_name", "display_name", False),
+        ("parents", "service_descriptions", False),
+        ("importance", "#", False),
+        ("servicegroups", "servicegroup_names", False),
+        ("is_volatile", "[0/1]", False),
+        ("check_command", "command_name", True),
+        ("initial_state", "[o,w,u,c]", False),
+        ("max_check_attempts", "#", True),
+        ("check_interval", "#", True),
+        ("retry_interval", "#", True),
+        ("active_checks_enabled", "[0/1]", False),
+        ("passive_checks_enabled", "[0/1]", False),
+        ("check_period", "timeperiod_name", True),
+        ("obsess_over_service / obsess", "[0/1]", False),
+        ("check_freshness", "[0/1]", False),
+        ("freshness_threshold", "#", False),
+        ("event_handler", "command_name", False),
+        ("event_handler_enabled", "[0/1]", False),
+        ("low_flap_threshold", "#", False),
+        ("high_flap_threshold", "#", False),
+        ("flap_detection_enabled", "[0/1]", False),
+        ("flap_detection_options", "[o,w,c,u]", False),
+        ("process_perf_data", "[0/1]", False),
+        ("retain_status_information", "[0/1]", False),
+        ("retain_nonstatus_information", "[0/1]", False),
+        ("notification_interval", "#", True),
+        ("first_notification_delay", "#", False),
+        ("notification_period", "timeperiod_name", True),
+        ("notification_options", "[w,u,c,r,f,s,n]", True),
+        ("notifications_enabled", "[0/1]", True),
+        ("contacts", "contacts", False),
+        ("contact_groups", "contact_groups", False),
+        ("stalking_options", "[o,w,u,c,N]", False),
+        ("notes", "note_string", False),
+        ("notes_url", "url", False),
+        ("action_url", "url", False),
+        ("icon_image", "image_file", False),
+        ("icon_image_alt", "alt_string", False),
+    ],
+    "servicegroup": [
+        ("servicegroup_name", "servicegroup_name", True),
+        ("alias", "alias", True),
+        ("members", "host,service,...", False),
+        ("servicegroup_members", "servicegroups", False),
+        ("notes", "note_string", False),
+        ("notes_url", "url", False),
+        ("action_url", "url", False),
+    ],
+    "contact": [
+        ("contact_name", "contact_name", True),
+        ("alias", "alias", False),
+        ("contactgroups", "contactgroup_names", False),
+        ("minimum_importance", "#", False),
+        ("host_notifications_enabled", "[0/1]", True),
+        ("service_notifications_enabled", "[0/1]", True),
+        ("host_notification_period", "timeperiod_name", True),
+        ("service_notification_period", "timeperiod_name", True),
+        ("host_notification_options", "[d,u,r,f,s,n]", True),
+        ("service_notification_options", "[w,u,c,r,f,s,n]", True),
+        ("host_notification_commands", "command_name[,command_name...]", True),
+        ("service_notification_commands", "command_name[,command_name...]", True),
+        ("email", "email_address", False),
+        ("pager", "pager_number_or_gateway", False),
+        ("address1..address6", "additional_contact_address", False),
+        ("can_submit_commands", "[0/1]", False),
+        ("retain_status_information", "[0/1]", False),
+        ("retain_nonstatus_information", "[0/1]", False),
+    ],
+    "contactgroup": [
+        ("contactgroup_name", "contactgroup_name", True),
+        ("alias", "alias", True),
+        ("members", "contacts", False),
+        ("contactgroup_members", "contactgroups", False),
+    ],
+    "timeperiod": [
+        ("timeperiod_name", "timeperiod_name", True),
+        ("alias", "alias", True),
+        ("sunday..saturday", "timeranges", False),
+        ("[exception]", "timeranges", False),
+        ("exclude", "timeperiod1,timeperiod2,...", False),
+    ],
+    "command": [
+        ("command_name", "command_name", True),
+        ("command_line", "command_line", True),
+    ],
+}
+
+
+def format_object_directives(resource: str) -> str:
+    """Render documented Nagios directives for argparse help."""
+    if resource == "template":
+        return (
+            "Templates use the directives of their --object-type plus the common "
+            "name/use/register directives. Run 'nagios-cmd help host', "
+            "'nagios-cmd help service', or 'nagios-cmd help contact'."
+        )
+    directives = OBJECT_DIRECTIVES.get(resource, [])
+    rows = ["Nagios object directives:", "  PROPERTY                      REQUIRED  VALUE"]
+    for key, value, required in [*COMMON_DIRECTIVES, *directives]:
+        rows.append(f"  {key:<29} {'yes' if required else 'no':<8}  {value}")
+    rows.extend([
+        "",
+        "Required directives may be inherited with 'use'.",
+        "Pass additional directives with -o key=value.",
+    ])
+    return "\n".join(rows)
 
 # nagios-cmd may only modify files below these administrator-owned roots.
 # Aggregate files directly below objects/ remain Ansible-owned and read-only.
@@ -320,15 +496,13 @@ def validate_config() -> None:
 
 
 def write_text_atomic(
-    path: Path, content: str, force: bool = False, validate: bool = True
+    path: Path, content: str, force: bool = False
 ) -> None:
-    """Atomically write a custom file and restore content/metadata on failure."""
+    """Atomically write a custom file without validating or reloading Nagios."""
     if path.exists():
         confirm(f"Overwrite {path}?", force=force)
     ensure_directory(path.parent)
-    old_exists = path.exists()
-    old_content = path.read_text(encoding="utf-8") if old_exists else None
-    old_stat = path.stat() if old_exists else None
+    old_stat = path.stat() if path.exists() else None
     uid, gid = managed_identity()
     if (
         old_stat is not None
@@ -340,22 +514,6 @@ def write_text_atomic(
             "run nagios-cmd as root"
         )
     write_raw_atomic(path, content, MANAGED_FILE_MODE, uid, gid)
-    if not validate:
-        return
-    try:
-        validate_config()
-    except Exception:
-        if old_exists and old_content is not None and old_stat is not None:
-            write_raw_atomic(
-                path,
-                old_content,
-                stat.S_IMODE(old_stat.st_mode),
-                old_stat.st_uid,
-                old_stat.st_gid,
-            )
-        else:
-            path.unlink(missing_ok=True)
-        raise
 
 
 def object_block(object_type: str, fields: Dict[str, str]) -> str:
@@ -535,7 +693,7 @@ def update_object(obj: NagiosObject, fields: Dict[str, str], force: bool) -> Non
 
 
 def remove_object(obj: NagiosObject, force: bool) -> None:
-    """Remove a custom object and restore its original metadata on failure."""
+    """Remove a custom object without validating or reloading Nagios."""
     if not object_is_custom(obj):
         die(f"refusing to remove Ansible/default-owned object in {obj.path}")
     confirm(f"Remove object from {obj.path}?", force=force)
@@ -555,17 +713,6 @@ def remove_object(obj: NagiosObject, force: bool) -> None:
         write_text_atomic(obj.path, new_text + "\n", force=True)
         return
     obj.path.unlink()
-    try:
-        validate_config()
-    except Exception:
-        write_raw_atomic(
-            obj.path,
-            original_text,
-            stat.S_IMODE(original_stat.st_mode),
-            original_stat.st_uid,
-            original_stat.st_gid,
-        )
-        raise
 
 
 def render_template(text: str, variables: Dict[str, str]) -> str:
@@ -849,9 +996,19 @@ def cmd_config_reload(args: argparse.Namespace) -> int:
 
 def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource: str) -> None:
     """Register add/remove/show/list/set/get argparse actions for a generic resource."""
-    parser = subparsers.add_parser(resource, help=f"Manage {resource} objects")
+    parser = subparsers.add_parser(
+        resource,
+        help=f"Manage {resource} objects",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=format_object_directives(resource),
+    )
     actions = parser.add_subparsers(dest="action", required=True)
-    add_parser = actions.add_parser("add", help=f"Add {resource}")
+    add_parser = actions.add_parser(
+        "add",
+        help=f"Add {resource}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=format_object_directives(resource),
+    )
     add_parser.add_argument("name")
     if resource == "host":
         add_parser.add_argument("address")
@@ -897,7 +1054,12 @@ def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource
 
 def add_service_parser(subparsers: argparse._SubParsersAction) -> None:
     """Register service-specific argparse actions."""
-    parser = subparsers.add_parser("service", help="Manage services and service definition templates")
+    parser = subparsers.add_parser(
+        "service",
+        help="Manage services and service definition templates",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=format_object_directives("service"),
+    )
     actions = parser.add_subparsers(dest="action", required=True)
     for alias in ("show", "list"):
         show_parser = actions.add_parser(alias, help="Show/list service templates or configured services")
@@ -948,8 +1110,26 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser and subcommands."""
     parser = argparse.ArgumentParser(prog="nagios-cmd", description="Manage custom Nagios configuration")
     subparsers = parser.add_subparsers(dest="resource", required=True)
-    help_parser = subparsers.add_parser("help", help="Show help")
-    help_parser.set_defaults(func=lambda args: (parser.print_help() or 0))
+    help_parser = subparsers.add_parser(
+        "help",
+        help="Show top-level help or documented directives for an object type",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    help_parser.add_argument(
+        "object_type",
+        nargs="?",
+        choices=[*OBJECT_DIRECTIVES.keys(), "template"],
+        help="Nagios object type",
+    )
+
+    def show_help(args: argparse.Namespace) -> int:
+        if args.object_type:
+            print(format_object_directives(args.object_type))
+            return 0
+        parser.print_help()
+        return 0
+
+    help_parser.set_defaults(func=show_help)
     for resource in ["host", "hostgroup", "servicegroup", "contact", "contactgroup", "command", "template", "timeperiod"]:
         add_generic_resource_parser(subparsers, resource)
     add_service_parser(subparsers)
