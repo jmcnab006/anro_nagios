@@ -85,6 +85,19 @@ argument_specs:
         default: loopback-only
         description:
           - Value assigned to Postfix inet_interfaces.
+      anro_nagios_postfix_from_address:
+        type: str
+        default: ""
+        description:
+          - Sender address used for outbound email generated through Postfix.
+          - An empty value preserves the original sender address.
+
+      anro_nagios_postfix_reply_to_address:
+        type: str
+        default: ""
+        description:
+          - Reply-To address added to outbound email generated through Postfix.
+          - An empty value does not add a Reply-To header.
 
       anro_nagios_domain:
         type: str

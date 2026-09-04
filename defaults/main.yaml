@@ -41,6 +41,13 @@ anro_nagios_postfix_service_enabled: true
 anro_nagios_postfix_service_state: started
 anro_nagios_postfix_relayhost: ""
 anro_nagios_postfix_inet_interfaces: loopback-only
+# Sender address used for locally generated Nagios email.
+# Leave empty to preserve the original envelope/header sender.
+anro_nagios_postfix_from_address: ""
+
+# Reply-To header added to outbound Nagios email.
+# Leave empty to avoid adding a Reply-To header.
+anro_nagios_postfix_reply_to_address: ""
 
 # Domain and canonical server name used by Apache and Postfix. Supplying an
 # already-qualified inventory_hostname does not append the domain a second time.

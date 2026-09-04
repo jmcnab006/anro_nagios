@@ -756,10 +756,19 @@ def cmd_generic_list(args: argparse.Namespace) -> int:
     if not rows:
         print(f"No {args.resource} objects found.")
         return 0
-    for name, path in sorted(rows):
-        print(f"{name}\t{path}")
-    return 0
 
+    name_width = max(
+        len("NAME"),
+        max(len(name) for name, _path in rows),
+    )
+
+    print(f"{'NAME':<{name_width}}  FILE")
+    print(f"{'-' * name_width}  {'-' * 40}")
+
+    for name, path in rows:
+        print(f"{name:<{name_width}}  {path}")
+
+    return 0
 
 def cmd_generic_show(args: argparse.Namespace) -> int:
     """Show one object's raw config, or list objects if no name is given."""

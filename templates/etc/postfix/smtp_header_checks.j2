@@ -1,0 +1,3 @@
+# Managed by Ansible.
+# Add Reply-To immediately before the From header.
+/^From:/ PREPEND Reply-To: {{ anro_nagios_postfix_reply_to_address }}

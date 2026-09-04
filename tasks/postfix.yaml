@@ -8,6 +8,26 @@
     mode: "0644"
   notify: anro_restart_postfix
 
+- name: Configure Postfix sender canonical map
+  ansible.builtin.template:
+    src: etc/postfix/sender_canonical.j2
+    dest: /etc/postfix/sender_canonical
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - anro_restart_postfix
+
+- name: Configure Postfix outbound header checks
+  ansible.builtin.template:
+    src: etc/postfix/smtp_header_checks.j2
+    dest: /etc/postfix/smtp_header_checks
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - anro_restart_postfix
+
 - name: Configure Postfix
   ansible.builtin.template:
     src: etc/postfix/main.cf.j2

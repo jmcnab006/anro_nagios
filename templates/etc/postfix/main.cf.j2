@@ -29,3 +29,11 @@ mailbox_size_limit = 0
 recipient_delimiter = +
 inet_interfaces = {{ anro_nagios_postfix_inet_interfaces }}
 inet_protocols = all
+
+{% if anro_nagios_postfix_from_address | length > 0 %}
+sender_canonical_maps = regexp:/etc/postfix/sender_canonical
+{% endif %}
+
+{% if anro_nagios_postfix_reply_to_address | length > 0 %}
+smtp_header_checks = regexp:/etc/postfix/smtp_header_checks
+{% endif %}

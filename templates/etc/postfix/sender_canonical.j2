@@ -1,0 +1,3 @@
+# Managed by Ansible.
+# Rewrite all sender addresses to the configured Nagios sender.
+/.*/ {{ anro_nagios_postfix_from_address }}
