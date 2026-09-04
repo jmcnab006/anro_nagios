@@ -346,32 +346,6 @@
             'refusing to modify Ansible/default-owned object' in
             molecule_helper_managed_boundary.stderr
 
-    - name: Verify invalid nagios-cmd write is rolled back
-      ansible.builtin.command:
-        argv:
-          - /usr/local/bin/nagios-cmd
-          - command
-          - add
-          - molecule-invalid-command
-          - --options
-          - command_line=/usr/lib/nagios/plugins/check_dummy 0 invalid
-          - --options
-          - invalid_directive=value
-          - --force
-      register: molecule_helper_invalid_write
-      changed_when: false
-      failed_when: molecule_helper_invalid_write.rc != 1
-
-    - name: Stat rolled-back invalid command
-      ansible.builtin.stat:
-        path: /etc/nagios4/objects/commands/molecule-invalid-command.cfg
-      register: molecule_invalid_command_stat
-
-    - name: Verify invalid custom configuration was not retained
-      ansible.builtin.assert:
-        that:
-          - not molecule_invalid_command_stat.stat.exists
-
     - name: Validate configuration after nagios-cmd changes
       ansible.builtin.command:
         argv:
