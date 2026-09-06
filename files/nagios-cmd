@@ -749,10 +749,12 @@ def cmd_generic_add(args: argparse.Namespace) -> int:
 def cmd_generic_list(args: argparse.Namespace) -> int:
     """List object names and paths for a resource, including default-owned files."""
     rows = []
+
     for obj in iter_objects(args.resource):
         name = object_name(args.resource, obj)
         if name:
             rows.append((name, obj.path))
+
     if not rows:
         print(f"No {args.resource} objects found.")
         return 0
@@ -765,7 +767,7 @@ def cmd_generic_list(args: argparse.Namespace) -> int:
     print(f"{'NAME':<{name_width}}  FILE")
     print(f"{'-' * name_width}  {'-' * 40}")
 
-    for name, path in rows:
+    for name, path in sorted(rows):
         print(f"{name:<{name_width}}  {path}")
 
     return 0
@@ -837,36 +839,68 @@ def cmd_generic_remove(args: argparse.Namespace) -> int:
 def cmd_service_list(args: argparse.Namespace) -> int:
     """List service templates, show a template, list host services, or show one host service."""
     ensure_layout()
+
     if args.name and not args.service_description:
         tpl = service_template_path(args.name)
         if tpl.exists():
             print(f"Path: {tpl}\n")
             print(read_text(tpl).rstrip())
             return 0
+
         rows = []
         for obj in iter_objects("service"):
             if obj.fields.get("host_name") == args.name:
-                rows.append((obj.fields.get("service_description", ""), obj.path))
+                rows.append(
+                    (
+                        obj.fields.get("service_description", ""),
+                        obj.path,
+                    )
+                )
+
         if rows:
+            name_width = max(
+                len("NAME"),
+                max(len(service_description) for service_description, _path in rows),
+            )
+
+            print(f"{'NAME':<{name_width}}  FILE")
+            print(f"{'-' * name_width}  {'-' * 40}")
+
             for service_description, path in sorted(rows):
-                print(f"{service_description}\t{path}")
+                print(f"{service_description:<{name_width}}  {path}")
+
             return 0
+
         die(f"no service template or host services found for: {args.name}")
+
     if args.name and args.service_description:
         obj = find_object("service", args.name, args.service_description)
         if obj is None:
             die(f"service not found: {args.name}/{args.service_description}")
+
         print(f"Path: {obj.path}\n")
         print(obj.raw.rstrip())
         return 0
+
     templates = sorted(SERVICEDEFS_DIR.glob("*.tpl"))
     if not templates:
         print("No service definition templates found.")
         return 0
-    for path in templates:
-        print(f"{path.stem}\t{path}")
-    return 0
 
+    rows = [(path.stem, path) for path in templates]
+
+    name_width = max(
+        len("NAME"),
+        max(len(name) for name, _path in rows),
+    )
+
+    print(f"{'NAME':<{name_width}}  FILE")
+    print(f"{'-' * name_width}  {'-' * 40}")
+
+    for name, path in rows:
+        print(f"{name:<{name_width}}  {path}")
+
+    return 0
 
 def cmd_service_add(args: argparse.Namespace) -> int:
     """Render service definition templates and append them to a host config file."""
