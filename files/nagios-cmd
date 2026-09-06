@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import difflib
 import grp
 import os
 import pwd
@@ -384,6 +385,72 @@ def parse_options(values: Optional[List[str]]) -> Dict[str, str]:
             options[key] = value
     return options
 
+def valid_directive_names(resource: str) -> set[str]:
+    """Return valid directive names for one Nagios object type."""
+    directives = COMMON_DIRECTIVES + OBJECT_DIRECTIVES.get(resource, [])
+
+    names: set[str] = set()
+
+    for name, _value_hint, _required in directives:
+        # Documentation entries such as "obsess_over_host / obsess" represent
+        # multiple accepted directive names.
+        if " / " in name:
+            names.update(part.strip() for part in name.split(" / "))
+            continue
+
+        # Expand documented shorthand used by the help table.
+        if name == "address1..address6":
+            names.update(f"address{index}" for index in range(1, 7))
+            continue
+
+        if name == "sunday..saturday":
+            names.update(
+                {
+                    "sunday",
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                }
+            )
+            continue
+
+        # [exception] is documentation notation, not a literal directive.
+        if name == "[exception]":
+            continue
+
+        names.add(name)
+
+    return names
+
+
+def validate_options(resource: str, options: Dict[str, str]) -> None:
+    """Reject unknown Nagios directives before writing configuration."""
+    valid_directives = valid_directive_names(resource)
+
+    if not valid_directives:
+        die(f"no directive metadata defined for resource: {resource}")
+
+    for key in options:
+        if key in valid_directives:
+            continue
+
+        suggestion = difflib.get_close_matches(
+            key,
+            sorted(valid_directives),
+            n=1,
+            cutoff=0.6,
+        )
+
+        message = f"invalid {resource} directive: {key!r}"
+
+        if suggestion:
+            message += f"; did you mean {suggestion[0]!r}?"
+
+        die(message)
+
 
 def confirm(prompt: str, force: bool = False) -> None:
     """Confirm destructive or overwrite operations unless force is set."""
@@ -642,8 +709,41 @@ def ensure_hostgroup_file(hostgroup: str, force: bool = True) -> Path:
 def fields_for_add(resource: str, args: argparse.Namespace) -> Dict[str, str]:
     """Build initial Nagios fields for an add command and merge -o options."""
     options = parse_options(args.options)
+    validation_resource = resource
+
+    if resource == "template":
+        validation_resource = args.object_type
+
+    validate_options(validation_resource, options)
+
     if resource == "host":
-        fields = {"use": options.pop("use", "generic-host"), "host_name": args.name, "alias": options.pop("alias", args.name), "address": args.address, "hostgroups": args.hostgroup or DEFAULT_HOSTGROUP}
+        fields = {
+            "use": options.pop("use", "generic-host"),
+            "host_name": args.name,
+            "alias": options.pop("alias", args.name),
+            "address": args.address,
+            "hostgroups": args.hostgroup or DEFAULT_HOSTGROUP,
+        }
+
+    elif resource == "contact":
+        fields = {
+            "use": options.pop("use", "generic-contact"),
+            "contact_name": args.name,
+            "alias": options.pop("alias", args.name),
+        }
+
+    elif resource == "template":
+        default_use = {
+            "host": "generic-host",
+            "service": "generic-service",
+            "contact": "generic-contact",
+        }[args.object_type]
+
+        fields = {
+            "use": options.pop("use", default_use),
+            "name": args.name,
+            "register": options.pop("register", "0"),
+        }
     elif resource == "hostgroup":
         fields = {"hostgroup_name": args.name, "alias": options.pop("alias", args.name)}
     elif resource == "servicegroup":
@@ -652,8 +752,6 @@ def fields_for_add(resource: str, args: argparse.Namespace) -> Dict[str, str]:
             fields["members"] = args.members
         if args.servicegroup_members:
             fields["servicegroup_members"] = args.servicegroup_members
-    elif resource == "contact":
-        fields = {"contact_name": args.name, "alias": options.pop("alias", args.name)}
     elif resource == "contactgroup":
         fields = {"contactgroup_name": args.name, "alias": options.pop("alias", args.name)}
         if args.members:
@@ -662,8 +760,6 @@ def fields_for_add(resource: str, args: argparse.Namespace) -> Dict[str, str]:
             fields["contactgroup_members"] = args.contactgroup_members
     elif resource == "command":
         fields = {"command_name": args.name}
-    elif resource == "template":
-        fields = {"name": args.name, "register": options.pop("register", "0")}
     elif resource == "timeperiod":
         fields = {"timeperiod_name": args.name, "alias": options.pop("alias", args.name)}
     else:
@@ -803,6 +899,13 @@ def cmd_generic_set(args: argparse.Namespace) -> int:
     if obj is None:
         die(f"{args.resource} not found: {args.name}")
     fields = parse_options(args.options)
+
+    validation_resource = args.resource
+    if args.resource == "template":
+        validation_resource = obj.object_type
+
+    validate_options(validation_resource, fields)
+
     if args.resource == "host":
         if args.address:
             fields["address"] = args.address
@@ -973,6 +1076,7 @@ def cmd_service_set(args: argparse.Namespace) -> int:
     if obj is None:
         die(f"service not found: {args.hostname}/{args.service_description}")
     fields = parse_options(args.options)
+    validate_options("service", fields)
     if not fields:
         die("nothing to set; use -o key=value")
     update_object(obj, fields, force=args.force)
@@ -1057,7 +1161,7 @@ def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource
         add_parser.add_argument("address")
         add_parser.add_argument("-g", "--hostgroup", default=DEFAULT_HOSTGROUP)
     if resource == "template":
-        add_parser.add_argument("--object-type", choices=["host", "service", "contact"], default="host", help="Nagios object type for this template")
+        add_parser.add_argument("-t", "--object-type", choices=["host", "service", "contact"], default="host", help="Nagios object type for this template")
     if resource == "servicegroup":
         add_parser.add_argument("-m", "--members", help="Servicegroup members as host,service,host,service")
         add_parser.add_argument("--servicegroup-members", help="Comma-separated nested servicegroup members")
