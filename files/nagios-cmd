@@ -1167,7 +1167,7 @@ def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource
         add_parser.add_argument("--servicegroup-members", help="Comma-separated nested servicegroup members")
     if resource == "contactgroup":
         add_parser.add_argument("-m", "--members", help="Comma-separated contact members")
-        add_parser.add_argument("--contactgroup-members", help="Comma-separated nested contactgroup members")
+        add_parser.add_argument("-g", "--contactgroup-members", help="Comma-separated nested contactgroup members")
     add_parser.add_argument("-o", "--options", action="append", help="Nagios directive(s): key=value or key=value,key=value")
     add_parser.add_argument("-f", "--force", action="store_true", help="Do not prompt before overwrite")
     add_parser.set_defaults(func=cmd_generic_add, resource=resource)
