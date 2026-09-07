@@ -385,6 +385,56 @@ def parse_options(values: Optional[List[str]]) -> Dict[str, str]:
             options[key] = value
     return options
 
+def parse_variables(values: Optional[List[str]]) -> Dict[str, str]:
+    """Parse repeated -v/--variable template substitutions."""
+    variables: Dict[str, str] = {}
+
+    if not values:
+        return variables
+
+    for raw_value in values:
+        if "=" not in raw_value:
+            die(f"invalid variable {raw_value!r}; expected key=value")
+
+        key, value = raw_value.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
+            die(f"invalid variable {raw_value!r}; variable name cannot be empty")
+
+        variables[key] = value
+
+    return variables
+
+def validate_template_variables(content: str) -> None:
+    """Reject service definitions containing unresolved template variables."""
+    unresolved = sorted(
+        set(
+            re.findall(
+                r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}",
+                content,
+            )
+        )
+    )
+
+    if unresolved:
+        die(
+            "missing service template variable(s): "
+            + ", ".join(unresolved)
+        )
+
+def render_template_variables(
+    content: str,
+    variables: Dict[str, str],
+) -> str:
+    """Replace {{ variable }} placeholders with supplied values."""
+    for key, value in variables.items():
+        pattern = r"{{\s*" + re.escape(key) + r"\s*}}"
+        content = re.sub(pattern, lambda _match, replacement=value: replacement, content)
+
+    return content
+
 def valid_directive_names(resource: str) -> set[str]:
     """Return valid directive names for one Nagios object type."""
     directives = COMMON_DIRECTIVES + OBJECT_DIRECTIVES.get(resource, [])
@@ -1008,36 +1058,95 @@ def cmd_service_list(args: argparse.Namespace) -> int:
 def cmd_service_add(args: argparse.Namespace) -> int:
     """Render service definition templates and append them to a host config file."""
     ensure_layout()
+
     hostname = safe_name(args.hostname, "hostname")
     host_obj = find_object("host", hostname)
     if host_obj is None:
         die(f"host not found: {hostname}")
-    hostgroup = host_obj.fields.get("hostgroups", DEFAULT_HOSTGROUP).split(",", 1)[0] or DEFAULT_HOSTGROUP
+
+    hostgroup = (
+        host_obj.fields.get("hostgroups", DEFAULT_HOSTGROUP).split(",", 1)[0]
+        or DEFAULT_HOSTGROUP
+    )
     target = custom_object_path("host", hostname, hostgroup)
     if not target.exists():
         die(f"host config file not found: {target}")
-    services = [safe_name(s.strip(), "service definition") for s in args.services.split(",") if s.strip()]
+
+    services = [
+        safe_name(service.strip(), "service definition")
+        for service in args.services.split(",")
+        if service.strip()
+    ]
     if not services:
         die("no services specified")
+
+    # Start with host properties so service templates can reference values
+    # such as {{ host_name }}, {{ address }}, or other host directives.
     variables = dict(host_obj.fields)
     variables.setdefault("host_name", hostname)
+
+    # Explicit -v/--variable values override host-derived variables. This
+    # allows arbitrary template variables without adding them as Nagios
+    # object directives.
+    variables.update(parse_variables(args.variables))
+
     additions = []
+
     for service_name in services:
         tpl = service_template_path(service_name)
         if not tpl.exists():
             die(f"service definition template not found: {tpl}")
+
         template_vars = dict(variables)
         template_vars.setdefault("service_description", service_name)
-        rendered = render_template(read_text(tpl), template_vars).rstrip()
+
+        rendered = render_template(
+            read_text(tpl),
+            template_vars,
+        ).rstrip()
+
+        # Fail before writing if the template still contains unresolved
+        # variables. This prevents invalid {{ variable }} placeholders from
+        # being written into the Nagios configuration.
+        validate_template_variables(rendered)
+
         for obj in parse_objects_from_text(rendered, tpl):
-            if obj.object_type == "service":
-                desc = obj.fields.get("service_description", service_name)
-                existing = find_object("service", hostname, desc)
-                if existing is not None:
-                    confirm(f"service {hostname}/{desc} already exists in {existing.path}. Continue?", force=args.force)
-        additions.append(f"\n# BEGIN nagios-cmd service {service_name}\n{rendered}\n# END nagios-cmd service {service_name}\n")
+            if obj.object_type != "service":
+                continue
+
+            description = obj.fields.get(
+                "service_description",
+                service_name,
+            )
+            existing = find_object(
+                "service",
+                hostname,
+                description,
+            )
+            if existing is not None:
+                confirm(
+                    (
+                        f"service {hostname}/{description} already exists "
+                        f"in {existing.path}. Continue?"
+                    ),
+                    force=args.force,
+                )
+
+        additions.append(
+            "\n"
+            f"# BEGIN nagios-cmd service {service_name}\n"
+            f"{rendered}\n"
+            f"# END nagios-cmd service {service_name}\n"
+        )
+
     new_content = read_text(target).rstrip() + "\n" + "".join(additions)
-    write_text_atomic(target, new_content, force=args.force)
+
+    write_text_atomic(
+        target,
+        new_content,
+        force=args.force,
+    )
+
     print(f"added services to {hostname}: {', '.join(services)}")
     return 0
 
@@ -1217,6 +1326,9 @@ def add_service_parser(subparsers: argparse._SubParsersAction) -> None:
     add_parser.add_argument("hostname")
     add_parser.add_argument("-s", "--services", required=True, help="Comma-separated service definition template names")
     add_parser.add_argument("-f", "--force", action="store_true", help="Do not prompt before overwrite")
+    add_parser.add_argument("-v", "--variable", dest="variables", action="append", default=[], metavar="NAME=VALUE",
+        help="Set a service template variable; may be specified multiple times.",
+    )
     add_parser.set_defaults(func=cmd_service_add)
     remove_parser = actions.add_parser("remove", help="Remove service object(s) from a host")
     remove_parser.add_argument("hostname")
