@@ -44,6 +44,10 @@
   ansible.builtin.meta: flush_handlers
   when: anro_nagios_enabled | bool
 
+- name: Manage Nagios configuration backup services
+  ansible.builtin.import_tasks: backup.yaml
+  when: anro_nagios_backup_enabled | bool
+
 - name: Manage Nagios services
   ansible.builtin.import_tasks: services.yaml
   when: anro_nagios_enabled | bool

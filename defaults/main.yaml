@@ -4,6 +4,15 @@ anro_nagios_install: true
 anro_nagios_configure: true
 anro_nagios_install_helper: true
 
+# add cron configuration to include a daily backup of configuration and pruning the backups to only keep 30 days.
+anro_nagios_backup_enabled: true
+anro_nagios_backup_retention_days: 30
+anro_nagios_backup_minute: 0
+anro_nagios_backup_hour: 0
+anro_nagios_backup_cleanup_minute: 0
+anro_nagios_backup_cleanup_hour: 1
+
+
 anro_nagios_package_state: present
 
 # Base packages required for Nagios and its Apache web interface. Postfix/mail

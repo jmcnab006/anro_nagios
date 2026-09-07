@@ -1,0 +1,24 @@
+---
+- name: BACKUP | Configure daily Nagios configuration backup
+  ansible.builtin.cron:
+    name: "Nagios configuration backup"
+    user: root
+    minute: "{{ anro_nagios_backup_minute }}"
+    hour: "{{ anro_nagios_backup_hour }}"
+    job: "/usr/local/bin/nagios-cmd config backup"
+    state: present
+  when: anro_nagios_backup_enabled | bool
+
+- name: BACKUP | Configure Nagios configuration backup retention
+  ansible.builtin.cron:
+    name: "Nagios configuration backup cleanup"
+    user: root
+    minute: "{{ anro_nagios_backup_cleanup_minute }}"
+    hour: "{{ anro_nagios_backup_cleanup_hour }}"
+    job: >-
+      /usr/bin/find /etc/nagios4/backups
+      -type f
+      -mtime +{{ anro_nagios_backup_retention_days }}
+      -delete
+    state: present
+  when: anro_nagios_backup_enabled | bool

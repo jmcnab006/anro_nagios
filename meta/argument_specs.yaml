@@ -31,6 +31,47 @@ argument_specs:
         description:
           - Installs the nagios-cmd helper used to manage administrator-owned Nagios objects.
 
+      anro_nagios_backup_enabled:
+        type: bool
+        default: true
+        description:
+          - Controls whether the Nagios configuration backup and retention cron jobs are configured.
+
+      anro_nagios_backup_hour:
+        type: str
+        default: "1"
+        description:
+          - Hour when the daily Nagios configuration backup cron job runs.
+          - Uses cron hour syntax.
+
+      anro_nagios_backup_minute:
+        type: str
+        default: "0"
+        description:
+          - Minute when the daily Nagios configuration backup cron job runs.
+          - Uses cron minute syntax.
+
+      anro_nagios_backup_retention_days:
+        type: int
+        default: 30
+        description:
+          - Number of days Nagios configuration backups are retained.
+          - Backup files older than this value are removed by the cleanup cron job.
+
+      anro_nagios_backup_cleanup_hour:
+        type: str
+        default: "2"
+        description:
+          - Hour when the Nagios configuration backup cleanup cron job runs.
+          - Uses cron hour syntax.
+
+      anro_nagios_backup_cleanup_minute:
+        type: str
+        default: "0"
+        description:
+          - Minute when the Nagios configuration backup cleanup cron job runs.
+          - Uses cron minute syntax.
+
       anro_nagios_package_state:
         type: str
         default: present
