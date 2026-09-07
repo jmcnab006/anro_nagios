@@ -57,6 +57,7 @@ anro_nagios_postfix_from_address: ""
 # Reply-To header added to outbound Nagios email.
 # Leave empty to avoid adding a Reply-To header.
 anro_nagios_postfix_reply_to_address: "{{ anro_nagios_postfix_from_address | default('') }}"
+anro_nagios_postfix_check_mailq_enabled: false
 
 # Domain and canonical server name used by Apache and Postfix. Supplying an
 # already-qualified inventory_hostname does not append the domain a second time.
@@ -146,21 +147,7 @@ anro_nagios_localhost_address: 127.0.0.1
 anro_nagios_localhost_hostgroup: monitor-servers
 anro_nagios_local_load_warning_multiplier: 1.0
 anro_nagios_local_load_critical_multiplier: 1.5
-anro_nagios_local_services:
-  - service_description: PING
-    check_command: check_ping!100.0,20%!500.0,60%
-  - service_description: Root Partition
-    check_command: check_local_disk!20%!10%!/
-  - service_description: Current Users
-    check_command: check_local_users!20!50
-  - service_description: Total Processes
-    check_command: check_local_procs!4000!8000!RSZDT
-  - service_description: Current Load
-    auto_load: true
-  - service_description: SSH
-    check_command: check_ssh
-  - service_description: HTTP
-    check_command: check_http
+anro_nagios_local_services: []
 
 # Optional Twilio SMS notification helper credentials.
 anro_nagios_twilio_number: ""

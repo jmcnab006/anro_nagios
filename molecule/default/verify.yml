@@ -419,7 +419,7 @@
     - name: Verify Prometheus metrics content
       ansible.builtin.assert:
         that:
-          - "'nagios_exporter_hosts 1' in molecule_prometheus_metrics_request.content"
+          - "'nagios_exporter_up 1' in molecule_prometheus_metrics_request.content"
 
     # The dedicated exporter listener should expose only /metrics and must not
     # make the backing PHP implementation directly accessible.

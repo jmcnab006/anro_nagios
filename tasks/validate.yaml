@@ -254,7 +254,7 @@
     fail_msg: >-
       Every anro_nagios_local_services entry requires service_description and
       either check_command or auto_load: true.
-  loop: "{{ anro_nagios_local_services }}"
+  loop: "{{ _anro_nagios_local_services }}"
   loop_control:
     label: "{{ item.service_description | default('undefined') }}"
   when: anro_nagios_localhost_enabled | bool
@@ -263,8 +263,8 @@
   ansible.builtin.assert:
     that:
       - >-
-        anro_nagios_local_services | map(attribute='service_description') | list |
-        unique | list | length == anro_nagios_local_services | length
+        _anro_nagios_local_services | map(attribute='service_description') | list |
+        unique | list | length == _anro_nagios_local_services | length
     fail_msg: "anro_nagios_local_services contains duplicate service descriptions."
   when: anro_nagios_localhost_enabled | bool
 
