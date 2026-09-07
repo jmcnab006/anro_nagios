@@ -1059,16 +1059,38 @@ def cmd_generic_list(args: argparse.Namespace) -> int:
     return 0
 
 
-# Show either all objects or the raw configuration for one named generic object.
-# This command intentionally retains the original presentation behavior and does
-# not participate in the new list-only --format option.
+# Show either all objects or one named generic object. Text output follows the
+# original code path exactly, while --format json exposes the already-parsed
+# object metadata and directives without changing discovery or mutation logic.
 def cmd_generic_show(args: argparse.Namespace) -> int:
-    """Show one object's raw config, or list objects if no name is given."""
+    """Show one object in text or JSON format, or list objects if no name is given."""
+    # A show request without a name historically behaves like list. Forward the
+    # same Namespace so the selected output format is honored consistently.
     if not args.name:
         return cmd_generic_list(args)
+
     obj = find_object(args.resource, args.name)
     if obj is None:
         die(f"{args.resource} not found: {args.name}")
+
+    # JSON is an opt-in read-only presentation path. It serializes data that was
+    # already parsed by find_object() and does not alter the underlying object.
+    if getattr(args, "format", "text") == "json":
+        print(
+            json.dumps(
+                {
+                    "name": object_name(args.resource, obj),
+                    "path": str(obj.path),
+                    "object_type": obj.object_type,
+                    "fields": dict(obj.fields),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    # Preserve the established text output exactly for backward compatibility.
     print(f"Path: {obj.path}\n")
     print(obj.raw.rstrip())
     return 0
@@ -1444,9 +1466,19 @@ def cmd_config_check(args: argparse.Namespace) -> int:
 
 # Print every configuration file path currently considered by nagios-cmd. This is
 # an inventory/debugging utility and intentionally does not alter configuration.
+# JSON mode returns the same discovered paths as an array; text mode is unchanged.
 def cmd_config_list(args: argparse.Namespace) -> int:
-    """List discovered configuration file paths under objects/."""
-    for path in iter_cfg_files():
+    """List discovered configuration file paths in text or JSON format."""
+    # Materialize once so both output modes operate on the exact same discovery
+    # result and no configuration traversal semantics are changed.
+    paths = list(iter_cfg_files())
+
+    if getattr(args, "format", "text") == "json":
+        print(json.dumps([str(path) for path in paths], indent=2, sort_keys=True))
+        return 0
+
+    # Preserve the original text loop and one-path-per-line representation.
+    for path in paths:
         print(path)
     return 0
 
@@ -1499,9 +1531,23 @@ def cmd_config_reload(args: argparse.Namespace) -> int:
     return 0
 
 
-# Register argparse subcommands shared by generic Nagios resource types. The only
-# new interface added here is --format {text,json} on the list action; text remains
-# the default, so existing invocations retain their historical output.
+# Add the common output selector used by all read-only show/list commands. Keeping
+# this definition centralized guarantees the same choices and default everywhere.
+# Text remains the default so existing users and Molecule assertions continue to
+# receive the historical human-readable output unless JSON is explicitly requested.
+def add_format_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the shared --format {text,json} option to a read-only parser."""
+    parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format. Default: text",
+    )
+
+
+# Register argparse subcommands shared by generic Nagios resource types. Both show
+# and list gain the read-only --format selector; all add/set/remove/get arguments
+# and handlers remain unchanged so configuration manipulation semantics are intact.
 def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource: str) -> None:
     """Register add/remove/show/list/set/get argparse actions for a generic resource."""
     parser = subparsers.add_parser(
@@ -1535,13 +1581,9 @@ def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource
     for alias in ("show", "list"):
         show_parser = actions.add_parser(alias, help=f"{alias.capitalize()} {resource} objects")
         show_parser.add_argument("name", nargs="?")
-        if alias == "list":
-            show_parser.add_argument(
-                "--format",
-                choices=("text", "json"),
-                default="text",
-                help="Output format. Default: text",
-            )
+        # --format affects presentation only. The default text mode preserves the
+        # command's pre-existing output and therefore remains backward compatible.
+        add_format_argument(show_parser)
         show_parser.set_defaults(func=cmd_generic_show if alias == "show" else cmd_generic_list, resource=resource)
     get_parser = actions.add_parser("get", help=f"Get {resource} directive values")
     get_parser.add_argument("name")
@@ -1567,9 +1609,9 @@ def add_generic_resource_parser(subparsers: argparse._SubParsersAction, resource
     remove_parser.set_defaults(func=cmd_generic_remove, resource=resource)
 
 
-# Register service-specific argparse actions. Service list receives the same optional
-# --format {text,json} switch as generic lists, while show/add/remove/get/set argument
-# shapes and behavior are left unchanged.
+# Register service-specific argparse actions. Service show and list receive the same
+# optional --format selector; add/remove/get/set argument shapes and handlers remain
+# unchanged to preserve all existing configuration mutation behavior.
 def add_service_parser(subparsers: argparse._SubParsersAction) -> None:
     """Register service-specific argparse actions."""
     parser = subparsers.add_parser(
@@ -1583,13 +1625,9 @@ def add_service_parser(subparsers: argparse._SubParsersAction) -> None:
         show_parser = actions.add_parser(alias, help="Show/list service templates or configured services")
         show_parser.add_argument("name", nargs="?")
         show_parser.add_argument("service_description", nargs="?")
-        if alias == "list":
-            show_parser.add_argument(
-                "--format",
-                choices=("text", "json"),
-                default="text",
-                help="Output format. Default: text",
-            )
+        # The same handler serves show and list. Supplying --format json only
+        # changes serialization; text remains the default historical behavior.
+        add_format_argument(show_parser)
         show_parser.set_defaults(func=cmd_service_list)
     add_parser = actions.add_parser("add", help="Add service template(s) to a host")
     add_parser.add_argument("hostname")
@@ -1627,6 +1665,9 @@ def add_config_parser(subparsers: argparse._SubParsersAction) -> None:
     check_parser = actions.add_parser("check", help="Run Nagios validation")
     check_parser.set_defaults(func=cmd_config_check)
     list_parser = actions.add_parser("list", help="List configuration file paths")
+    # Config list is also a read-only list operation, so expose the same output
+    # contract without changing its default text behavior.
+    add_format_argument(list_parser)
     list_parser.set_defaults(func=cmd_config_list)
     dump_parser = actions.add_parser("dump", help="Dump concatenated configuration")
     dump_parser.set_defaults(func=cmd_config_dump)
