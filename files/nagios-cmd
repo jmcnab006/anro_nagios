@@ -1255,7 +1255,13 @@ def add_config_parser(subparsers: argparse._SubParsersAction) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser and subcommands."""
-    parser = argparse.ArgumentParser(prog="nagios-cmd", description="Manage custom Nagios configuration")
+    parser = argparse.ArgumentParser(prog="nagios-cmd", description="""
+        Manage custom Nagios configuration via command line options.
+        
+        Object reference values:
+        https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/objectdefinitions.html
+    """,
+    formatter_class = argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(dest="resource", required=True)
     help_parser = subparsers.add_parser(
         "help",
