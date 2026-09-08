@@ -54,3 +54,7 @@ anro_nagios_prometheus_auth_enabled: true
 anro_nagios_prometheus_auth_users:
   - name: prometheus
     password: prometheus-test-password
+
+anro_nagios_local_services:
+  - service_description: Check Postfix Mail Queue
+    check_command: check_mailq_postfix!10!20

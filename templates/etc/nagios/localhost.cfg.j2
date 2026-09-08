@@ -16,7 +16,7 @@ define hostgroup {
     members                 {{ anro_nagios_localhost_host_name }}
 }
 
-{% for service in anro_nagios_local_services %}
+{% for service in _anro_nagios_local_services %}
 define service {
     use                     {{ service.use | default('local-service') }}
     host_name               {{ anro_nagios_localhost_host_name }}
